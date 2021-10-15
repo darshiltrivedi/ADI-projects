@@ -9,7 +9,7 @@ import time
 #Connect Pluto
 sys.path.append('C:/apop/Git_Repositories/pyadi-iio')
 
-pluto_tx = adi.Pluto(uri="ip:192.168.2.2")  # Pluto on RPI doesn't work with pyadi
+pluto_tx = adi.Pluto(uri="ip:192.168.2.1")  # Pluto on RPI doesn't work with pyadi
 phaser = adi.adar1000_array(uri="ip:analog.local", chip_ids=["BEAM0", "BEAM1", "BEAM2", "BEAM3"],
                                 device_map=[[1, 2], [3, 4]],
                                 element_map=[[1, 2, 3, 4], [5, 6, 7, 8], [9, 10, 11, 12], [13, 14, 15, 16]],
@@ -37,7 +37,7 @@ phaser.steer_rx(azimuth=10, elevation=45)
 
 # Set the element gains to 0x67
 for element in phaser.elements.values():
-    element.rx_gain = 0x7F
+    element.rx_gain = 255
 phaser.latch_rx_settings()
 
 # print(sdr.rx())
