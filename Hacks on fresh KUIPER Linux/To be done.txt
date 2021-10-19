@@ -26,3 +26,4 @@ AttributeError: /lib/arm-linux-gnueabihf/libiio.so.0: undefined symbol: iio_devi
 
 So a few things to sort out, but at least now we know the delta from a freshly burned Kuiper image, to one where the rx() method works.
 
+Checking functionality of pre-commit
