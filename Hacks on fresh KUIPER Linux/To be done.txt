@@ -26,3 +26,10 @@ AttributeError: /lib/arm-linux-gnueabihf/libiio.so.0: undefined symbol: iio_devi
 
 So a few things to sort out, but at least now we know the delta from a freshly burned Kuiper image, to one where the rx() method works.
 
+In order to run both adar1000 and Pluto on raspberry Pi you need to do this additional step
+
+Clone the adar1000-labels-fix branch of pyadi and replace adar1000.py file from the local library where we import adi to adar1000.py of cloned branch
+
+sudo clone --branch adar1000-labels-fix https://github.com/analogdevicesinc/pyadi-iio
+sudo cp /home/analog/cloned_gits/pyadi-iio/adi/adar1000.py /usr/local/lib/python3.7/dist-packages/adi/adar1000.py
+
