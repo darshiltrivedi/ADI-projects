@@ -31,5 +31,8 @@ In order to run both adar1000 and Pluto on raspberry Pi you need to do this addi
 Clone the adar1000-labels-fix branch of pyadi and replace adar1000.py file from the local library where we import adi to adar1000.py of cloned branch
 
 sudo clone --branch adar1000-labels-fix https://github.com/analogdevicesinc/pyadi-iio
-sudo cp /home/analog/cloned_gits/pyadi-iio/adi/adar1000.py /usr/local/lib/python3.7/dist-packages/adi/adar1000.py
+sudo cp /home/analog/cloned_gits/pyadi-iio/adi/adar1000.py /usr/local/lib/python3.7/dist-packages/adi/adar1000.py:
+
+
+For ADAR1000, auto uri is static i.e. ip:analog. so if you changed the hostname of raspberry Pi to something it will not dynamically change and you have to provedi uri="ip:something" in adi.adar1000() 
 
