@@ -1,0 +1,18 @@
+Driver side of this:-
+
+Changed device attributes to channel attribute as IIO info says it has channel attributes
+The name of channel is "altvoltage0"
+For 3-wire spi of RPI MISO is left unconnected
+In bidirectional SPI mode the same SPI standard is implemented, except that a single wire is used for data (MOMI) instead of the two used in standard mode (MISO and MOSI). In this mode, the MOSI pin serves as MOMI pin.
+
+
+
+
+
+Device side of things:-
+
+If the device is not working freq spectrum will show 10.606GHz as it is the bare minimum freq when the device is powered up.
+When freq is 10.606GHz (min) Vtune is 0.0 i.e. pll is not working when freq is 13GHz(max) Vtune is 15V it means that is limit of op-amp and pll.
+Op-amp power is neccesary to make it work. 
+Vtune changes with type of ramp and Output frequency.
+Windows GUI doesn't work if the phase detector polarity is positive. 
