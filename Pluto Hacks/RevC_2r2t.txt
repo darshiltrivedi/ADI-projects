@@ -9,7 +9,8 @@ To Apply this hack:-
 
 # Step 1:- Upgrade Pluto to Latest Firmware.
 Here a link to wiki analog on how to do so - o	https://wiki.analog.com/university/tools/pluto/users/firmware#upgrading
-There is a small change to upgrade process, instead of copying just pluto.frm file, copy entire unzipped upgrade file that you downloaded to Pluto mass storage device. Follow rest of the steps in same order that is eject non parent drive and wait for pluto to reconnect itself.
+There is a small change to upgrade process, instead of copying just pluto.frm file, copy entire unzipped upgrade file that you downloaded to Pluto mass storage device. 
+Follow rest of the steps in same order that is eject non parent drive and wait for pluto to reconnect itself.
 
 # Step 2:- Next step is to ssh into pluto and change few configurations.
 You can use putty, powershell of program of your choice to ssh into pluto. The default ip address of pluto is 192.168.2.1 if you have changed it use ip address accordingly.
