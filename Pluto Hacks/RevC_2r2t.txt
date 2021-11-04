@@ -13,7 +13,7 @@ There is a small change to upgrade process, instead of copying just pluto.frm fi
 Follow rest of the steps in same order that is eject non parent drive and wait for pluto to reconnect itself.
 
 # Step 2:- Next step is to ssh into pluto and change few configurations.
-You can use putty, powershell of program of your choice to ssh into pluto. The default ip address of pluto is 192.168.2.1 if you have changed it use ip address accordingly.
+You can use putty, powershell or program of your choice to ssh into pluto. The default ip address of pluto is 192.168.2.1 if you have changed it use ip address accordingly.
 Here how you can change pluto's IP address:- https://wiki.analog.com/university/tools/pluto/users/customizing
 
 Login as root and password for root by default is analog. 
