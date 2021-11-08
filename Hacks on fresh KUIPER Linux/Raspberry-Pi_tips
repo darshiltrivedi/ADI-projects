@@ -5,3 +5,9 @@ scp analog@"Pi-ip-address":/home/analog/"File-dir" "Windows-dir"
 
 To clear ssh-keygen or overwrite remote host
 ssh-keygen -R "you server hostname or ip"
+
+To Zip a directory
+sudo zip -r name-of-zip.zip" /home/analog/"Dir-of-folder"
+
+To Compile dtb
+dtc -I dts -O dtb -o "something.dtbo" "something.dts"
