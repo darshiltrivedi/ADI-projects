@@ -29,6 +29,7 @@ So a few things to sort out, but at least now we know the delta from a freshly b
 In order to run both adar1000 and Pluto on raspberry Pi you need to do this additional step
 
 Even after installing from source the dist-packages of adar1000 remains un updated.
+So copy entire adi folder of cloned git to dist-packages
 sudo cp /home/analog/cloned_gits/pyadi-iio/adi/adar1000.py /usr/local/lib/python3.7/dist-packages/adi/adar1000.py:
 
 
