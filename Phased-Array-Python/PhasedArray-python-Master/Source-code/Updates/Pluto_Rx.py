@@ -3,7 +3,7 @@ import numpy as np
 import matplotlib.pyplot as plt
 import time
 
-pluto_Rx = adi.Pluto('ip:192.168.2.1')
+pluto_Rx = adi.Pluto('ip:10.84.10.64')
 pluto_Rx.sample_rate = 3000 * 10**3
 # pluto_Rx.tx_lo = 3000 * 10**6
 pluto_Rx.rx_lo = 4000 * 10**6

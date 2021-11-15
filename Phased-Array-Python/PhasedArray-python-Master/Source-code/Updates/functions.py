@@ -1,42 +1,45 @@
-import sys
 import numpy as np
 import matplotlib.pyplot as plt
 import time
 from project_config import *
 
 
-# sys.path.append('C:\ProgramData\Anaconda3\envs\adi\Lib\site-packages')
-
-
 def ad9361_init(pluto_tx):
     # Setup Pluto
+    
+    # move to fdd mode.  see https://github.com/analogdevicesinc/pyadi-iio/blob/ensm-example/examples/ad9361_advanced_ensm.py
     pluto_tx._ctrl.debug_attrs[
-        "adi,frequency-division-duplex-mode-enable"].value = "1"  # move to fdd mode.  see https://github.com/analogdevicesinc/pyadi-iio/blob/ensm-example/examples/ad9361_advanced_ensm.py
+        "adi,frequency-division-duplex-mode-enable"].value = "1"  
     pluto_tx._ctrl.debug_attrs[
         "adi,ensm-enable-txnrx-control-enable"].value = "0"  # Disable pin control so spi can move the states
     pluto_tx._ctrl.debug_attrs["initialize"].value = "1"
+    
     pluto_tx.rx_enabled_channels = [0, 1]  # enable Rx1 (voltage0) and Rx2 (voltage1)
-    pluto_tx.gain_control_mode_chan0 = 'manual'  # We must be in manual gain control mode (otherwise we won't see the peaks and nulls!)
-    pluto_tx.gain_control_mode_chan1 = 'manual'  # We must be in manual gain control mode (otherwise we won't see the peaks and nulls!)
+    
 
     pluto_tx._rxadc.set_kernel_buffers_count(
         1)  # Default is 4 Rx buffers are stored, but we want to change and immediately measure the result, so buffers=1
     rx = pluto_tx._ctrl.find_channel('voltage0')
     rx.attrs['quadrature_tracking_en'].value = '1'  # set to '1' to enable quadrature tracking
-    pluto_tx.sample_rate = 3000000  # Sampling rate
+    pluto_tx.sample_rate = int(2000000)  # Sampling rate
+    
     pluto_tx.rx_buffer_size = int(4 * 256)
     pluto_tx.tx_cyclic_buffer = True  # start the cyclic buffer
     pluto_tx.tx_lo = 6000000000  # Transmit freq
     pluto_tx.tx_buffer_size = int(2 ** 18)
+    pluto_tx.rx_rf_bandwidth = int(10e6)
 
-    pluto_tx.tx_hardwaregain_chan0 = -80  # Make sure the Tx channels are attenuated (or off) and their freq is far away from Rx
-    pluto_tx.tx_hardwaregain_chan1 = -80
+    pluto_tx.gain_control_mode_chan0 = 'manual'  # We must be in manual gain control mode (otherwise we won't see the peaks and nulls!)
+    pluto_tx.gain_control_mode_chan1 = 'manual'  # We must be in manual gain control mode (otherwise we won't see the peaks and nulls!)
+    pluto_tx.tx_hardwaregain_chan0 = -10  # Make sure the Tx channels are attenuated (or off) and their freq is far away from Rx
+    pluto_tx.tx_hardwaregain_chan1 = -10
     pluto_tx.rx_hardwaregain_chan0 = 30
     pluto_tx.rx_hardwaregain_chan1 = 30
 
-    pluto_tx.dds_single_tone(int(0.0e6), 0.9, 0)  # pluto_tx.dds_single_tone(tone_freq_hz, tone_scale_0to1, tx_channel)
-    pluto_tx.rx_lo = 4492000000  # Recieve Freq
-    time.sleep(0.1)
+#     pluto_tx.dds_single_tone(int(0.0e6), 0.9, 0)  # pluto_tx.dds_single_tone(tone_freq_hz, tone_scale_0to1, tx_channel)
+#     pluto_tx.dds_single_tone(int(0.0e6), 0.9, 1)  # pluto_tx.dds_single_tone(tone_freq_hz, tone_scale_0to1, tx_channel)
+    pluto_tx.rx_lo = 2000000000 #4495000000  # Recieve Freq
+    
 
 
 def PLUTO_init(pluto_tx):
@@ -59,12 +62,21 @@ def PLUTO_init(pluto_tx):
     pluto_tx.rx_lo = 4492000000
 
 
+def adf4159_init(pluto_tx):
+    pluto_tx.frequency = 6247500000
+    pluto_tx.freq_dev_step = 5690
+    pluto_tx.freq_dev_range = 0
+    pluto_tx.freq_dev_time = 0
+    pluto_tx.enable = 0
+    pluto_tx.ramp_mode = "disabled"
+
+
 def ADAR_init(beam):
     # Configure ADAR1000
     # beam.initialize_devices()  # Always Intialize the device 1st as reset is performed at Initialization
     # If ADAR1000 array is used initialization work other wise reset each adar individually
     beam.reset()  # Performs a soft reset of the device (writes 0x81 to reg 0x00)
-    time.sleep(1)
+    time.sleep(0.1)
     beam._ctrl.reg_write(0x400, 0x55)  # This trims the LDO value to approx. 1.8V (to the center of its range)
 
     beam.sequencer_enable = False
@@ -94,6 +106,7 @@ def ADAR_init(beam):
     if device_mode == "rx":
         # Configure the device for Rx mode
         beam.mode = "rx"  # Mode of operation, bit 5 of reg 0x31. "rx", "tx", or "disabled".
+
         SELF_BIASED_LNAs = True
         if SELF_BIASED_LNAs:
             # Allow the external LNAs to self-bias
@@ -131,6 +144,7 @@ def ADAR_set_RxTaper(beam):
         # Set the gain depending on the device mode
         if device_mode == "rx":  # If you try to read device mode from device i.e. beam.mode it throws error.
             channel.rx_gain = rx_gain[i]  # rx_gain array defined in project_config file.
+#             print(channel, channel.rx_gain)
             time.sleep(0.1)
             i += 1
         else:
@@ -144,8 +158,8 @@ def ADAR_set_RxTaper(beam):
         beam.latch_tx_settings()  # writes 0x02 to reg 0x28.
 
 
-def ADAR_set_RxPhase(beam, Ph_Diff):
-    if num_ADARs == 1:
+def ADAR_set_RxPhase(beam, Ph_Diff, beam_no):
+    if beam_no == 1:
         Phase_A = ((np.rint(
             Ph_Diff * 0 / phase_step_size) * phase_step_size) + Rx1_Phase_Cal) % 360  # round each value to the nearest step size increment
         Phase_B = ((np.rint(
@@ -153,15 +167,14 @@ def ADAR_set_RxPhase(beam, Ph_Diff):
         Phase_C = ((np.rint(Ph_Diff * 2 / phase_step_size) * phase_step_size) + Rx3_Phase_Cal) % 360
         Phase_D = ((np.rint(Ph_Diff * 3 / phase_step_size) * phase_step_size) + Rx4_Phase_Cal) % 360
 
-    elif num_ADARs == 2:
+    elif beam_no == 2:
         Phase_A = ((np.rint(Ph_Diff * 4 / phase_step_size) * phase_step_size) + Rx5_Phase_Cal) % 360
         Phase_B = ((np.rint(Ph_Diff * 5 / phase_step_size) * phase_step_size) + Rx6_Phase_Cal) % 360
         Phase_C = ((np.rint(Ph_Diff * 6 / phase_step_size) * phase_step_size) + Rx7_Phase_Cal) % 360
         Phase_D = ((np.rint(Ph_Diff * 7 / phase_step_size) * phase_step_size) + Rx8_Phase_Cal) % 360
     channel_phase_value = [Phase_A, Phase_B, Phase_C, Phase_D]
+#     print(channel_phase_value)
 
-    # print(beam.channel2.rx_phase)  # This line of code has no activity on SPI bus
-    # whereas as when we try to set mode or gain and read it back it has activity on SPI bus.
 
     i = 0
     for channel in beam.channels:
@@ -183,13 +196,18 @@ def ADAR_Plotter(beam_list, sdr):
             PhaseValues = np.arange(-196.875, 196.875,
                                     phase_step_size)  # These are all the phase deltas (i.e. phase difference between Rx1 and Rx2, then Rx2 and Rx3, etc.) we'll sweep.
             PhaseStepNumber = 0  # this is the number of phase steps we'll take (140 in total).  At each phase step, we set the individual phases of each of the Rx channels
-            max_signal = -100  # Reset max_signal.  We'll keep track of the maximum signal we get as we do this 140 loop.
-            max_angle = 0  # Reset max_angle.  This is the angle where we saw the max signal.  This is where our compass will point.
-            output_items = np.zeros((5, 140), dtype=complex)
-
+            max_signal = -100000  # Reset max_signal.  We'll keep track of the maximum signal we get as we do this 140 loop.
+            max_angle = -90  # Reset max_angle.  This is the angle where we saw the max signal.  This is where our compass will point.
+            gain = []
+            delta = []
+            beam_phase = []
+            angle = []
+            diff_error = []
             for PhDelta in PhaseValues:
+                beam_no = 1
                 for i in range(0, len(beam_list)):  # Set Phase Values of all the adar1000 connected.
-                    ADAR_set_RxPhase(beam_list[i], PhDelta)
+                    ADAR_set_RxPhase(beam_list[i], PhDelta, beam_no)
+                    beam_no = 2
 
                 value1 = (c * np.radians(np.abs(PhDelta))) / (2 * 3.14159 * SignalFreq * d)
                 clamped_value1 = max(min(1, value1),
@@ -208,68 +226,84 @@ def ADAR_Plotter(beam_list, sdr):
                     chan1 = data[
                         0]  # Rx1 data. data is a list of values chan1 and chan2 are just 1st and 2nd element of list Do we have to discard all other values?
                     chan2 = data[1]  # Rx2 data. Changing data[0] to data. delta chan is all 0.
-                    # print(chan1, chan2, data)
                     sum_chan = chan1 + chan2
                     delta_chan = chan1 - chan2
-                    # print(sum_chan, delta_chan)
                     N = len(sum_chan)  # number of samples  len(sum_chan) = 1 as just 1st element of list is taken
-                    win = np.hamming(N)
+                    win = np.blackman(N)
                     y_sum = sum_chan * win
                     y_delta = delta_chan * win
-                    s_sum = np.fft.fftshift(y_sum)
-                    s_delta = np.fft.fftshift(y_delta)
+                    
+                    sp = np.absolute(np.fft.fft(y_sum))
+                    sp = sp[1:-1]
+                    s_sum = np.fft.fftshift(sp)
+                    
+                    dp = np.absolute(np.fft.fft(y_delta))
+                    dp = dp[1:-1]
+                    s_delta = np.fft.fftshift(dp)
+                    
                     max_index = np.argmax(s_sum)
                     total_angle = total_angle + (np.angle(s_sum[max_index]) - np.angle(s_delta[max_index]))
 
-                    s_mag_sum = np.abs(s_sum[max_index])  # * 2 / np.sum(win)
-                    s_mag_delta = np.abs(s_delta[max_index])  # * 2 / np.sum(win)
-                    s_dbfs_sum = 20 * np.log10(
-                        np.max([s_mag_sum, 10 ** (-15)]) / (
-                                    2 ** 12))  # make sure the log10 argument isn't zero (hence np.max)
-                    s_dbfs_delta = 20 * np.log10(np.max([s_mag_delta, 10 ** (-15)]) / (
-                            2 ** 12))  # make sure the log10 argument isn't zero (hence np.max)
+                    s_mag_sum = np.abs(s_sum[max_index])  * 2 / np.sum(win)
+                    s_mag_delta = np.abs(s_delta[max_index])  * 2 / np.sum(win)
+                    s_mag_sum = np.maximum(s_mag_sum, 10 ** (-15))
+                    s_mag_delta = np.maximum(s_mag_delta, 10 ** (-15))
+                    s_dbfs_sum = 20 * np.log10( s_mag_sum / (2 ** 12))  # make sure the log10 argument isn't zero (hence np.max)
+                    s_dbfs_delta = 20 * np.log10(s_mag_delta / (2 ** 12))  # make sure the log10 argument isn't zero (hence np.max)
                     total_sum = total_sum + (s_dbfs_sum)  # sum up all the loops, then we'll average
                     total_delta = total_delta + (s_dbfs_delta)  # sum up all the loops, then we'll average
                 PeakValue_sum = total_sum / Averages
                 PeakValue_delta = total_delta / Averages
                 PeakValue_angle = total_angle / Averages
 
-                if PeakValue_angle > 0:
-                    diff_angle = 1
-                    diff_chan = max((diff_angle * (PeakValue_sum - PeakValue_delta) + diff_angle * (
-                            PeakValue_sum + PeakValue_delta) / 2) / (PeakValue_sum + PeakValue_delta), 0.01)
+                if np.sign(PeakValue_angle) == -1:
+                    target_error = min(-0.01, (
+                                np.sign(PeakValue_angle) * (PeakValue_sum - PeakValue_delta) + np.sign(
+                            PeakValue_angle) * (PeakValue_sum + PeakValue_delta) / 2) / (
+                                                   PeakValue_sum + PeakValue_delta))
                 else:
-                    diff_angle = -1
-                    diff_chan = min((diff_angle * (PeakValue_sum - PeakValue_delta) + diff_angle * (
-                            PeakValue_sum + PeakValue_delta) / 2) / (PeakValue_sum + PeakValue_delta), -0.01)
-                # diff_angle=PeakValue_angle
-                # diff_chan = (diff_angle * (PeakValue_sum - PeakValue_delta) + diff_angle * (PeakValue_sum + PeakValue_delta)/2) / (PeakValue_sum + PeakValue_delta)
-                # diff_chan = PeakValue_sum - PeakValue_delta
+                    target_error = max(0.01, (
+                                np.sign(PeakValue_angle) * (PeakValue_sum - PeakValue_delta) + np.sign(
+                            PeakValue_angle) * (PeakValue_sum + PeakValue_delta) / 2) / (
+                                                   PeakValue_sum + PeakValue_delta))
+
 
                 if PeakValue_sum > max_signal:  # take the largest value, so that we know where to point the compass
                     max_signal = PeakValue_sum
-                    max_angle = PhDelta
+                    max_angle = PeakValue_angle
+                    max_PhDelta = PhDelta
+                    data_fft = sum_chan
+                gain.append(PeakValue_sum)
+                delta.append(PeakValue_delta)
+                beam_phase.append(PeakValue_angle)
+                angle.append(SteerAngle)
+                diff_error.append(target_error)
 
-                output_items[0][PhaseStepNumber] = ((1) * SteerAngle + (
-                        1j * PeakValue_sum))  # output this as a complex number so we can do an x-y plot with the constellation graph
-                output_items[1][PhaseStepNumber] = ((1) * SteerAngle + (
-                        1j * PeakValue_delta))  # output this as a complex number so we can do an x-y plot with the constellation graph
-                output_items[2][PhaseStepNumber] = ((1) * SteerAngle + (
-                        1j * diff_chan))  # output this as a complex number so we can do an x-y plot with the constellation graph
-                output_items[3][PhaseStepNumber] = ((1) * SteerAngle + (
-                        1j * diff_angle))  # output this as a complex number so we can do an x-y plot with the constellation graph
-                PhaseStepNumber = PhaseStepNumber + 1  # increment the phase delta and start this whole again.  This will repeat 140 times
-            # print(PhaseStepNumber)
-            output_items[0] = output_items[0][0:PhaseStepNumber]
-            output_items[1] = output_items[1][0:PhaseStepNumber]
-            output_items[2] = output_items[2][0:PhaseStepNumber]
-            output_items[3] = output_items[3][0:PhaseStepNumber]
-            output_items[4][:] = max_angle  # * (-1)+90
+            NumSamples = len(data_fft)  # number of samples
+            win = np.blackman(NumSamples)
+            y = data_fft * win
+            sp = np.absolute(np.fft.fft(y))
+            sp = sp[1:-1]
+            sp = np.fft.fftshift(sp)
+            s_mag = np.abs(sp) * 2 / np.sum(win)  # Scale FFT by window and /2 since we are using half the FFT spectrum
+            s_mag = np.maximum(s_mag, 10 ** (-15))
+            max_gain = 20 * np.log10(s_mag / (2 ** 12))  # Pluto is a 12 bit ADC, so use that to convert to dBFS
+            ts = 1 / float(sdr.sample_rate)
+            xf = np.fft.fftfreq(NumSamples, ts)
+            xf = np.fft.fftshift(xf[1:-1])  # this is the x axis (freq in Hz) for our fft plot
 
+            ArrayGain = gain
+            ArrayDelta = delta
+            ArrayBeamPhase = beam_phase
+            ArrayAngle = angle
+            ArrayError = diff_error
+            peak_gain = max(ArrayGain)
+            index_peak_gain = np.where(ArrayGain == peak_gain)
+            index_peak_gain = index_peak_gain[0]
+            max_angle = ArrayAngle[int(index_peak_gain[0])]
             plt.clf()
-            x = output_items[0].real
-            y = output_items[0].imag
-            plt.plot(x, y)
+#             plt.plot(xf/1e6, max_gain)
+            plt.scatter(ArrayAngle, ArrayGain) # Gain plots sum_chan. Delta plots the difference and Error plots the diff of sum & delta chans
             plt.draw()
             plt.pause(0.05)
             time.sleep(0.05)
@@ -295,10 +329,11 @@ def ADAR_Plotter(beam_list, sdr):
             max_gain = []
             max_signal = -100000
             max_angle = -90
-
+            beam_no = 1
             for PhDelta in PhaseValues:
                 for i in range(0, len(beam_list)):  # change according to number of adar1000 connected
-                    ADAR_set_RxPhase(beam_list[i], PhDelta)
+                    ADAR_set_RxPhase(beam_list[i], PhDelta, beam_no)
+
 
                 value1 = (c * np.radians(np.abs(PhDelta))) / (2 * 3.14159 * SignalFreq * d)
                 #  - sdr.tx_rf_bandwidth * 1000
@@ -363,3 +398,7 @@ def ADAR_Plotter(beam_list, sdr):
             plt.pause(0.05)
             time.sleep(0.05)
             print(angle[gain.index(max(gain))])  # This givens angle frequency source
+
+
+def save_variable(var):
+    np.savetxt('phase-cal.txt', var)
