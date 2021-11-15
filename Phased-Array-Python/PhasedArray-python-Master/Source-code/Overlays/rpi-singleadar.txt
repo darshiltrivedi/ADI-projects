@@ -1,0 +1,97 @@
+/dts-v1/;
+/plugin/;
+
+/ {
+	compatible = "brcm,bcm2836", "brcm,bcm2835", "brcm,bcm2708", "brcm,bcm2709";
+
+	fragment@0 {
+		target-path = "/";
+		__overlay__ {
+			clkin: clock@0 {
+				compatible = "fixed-clock";
+				clock-frequency = <100000000>;
+				clock-output-names = "adf4159_ext_refclk";
+				#clock-cells = <0>;
+			};
+		};
+	};
+
+	/* We have 3 spidev */
+	fragment@1 {
+		target = <&spi0_cs_pins>;
+		frag0: __overlay__ {
+				brcm,pins = <8>;
+				brcm,function = <1>; //output
+		};
+	};
+
+
+
+	fragment@2 {
+		target = <&spi0>;
+		__overlay__ {
+			#address-cells = <1>;
+			#size-cells = <0>;
+			cs-gpios = <&gpio 8 1>;
+			status = "okay";
+
+			adar1000@0 {
+				compatible = "adi,adar1000";
+				reg = <1>;
+				spi-max-frequency = <500000>;
+				
+
+				#address-cells = <1>;
+				#size-cells = <0>;
+
+				adar1000_0@0 {
+					reg = <1>;
+					label = "BEAM0";
+					adi,phasetable-name = "adar1000_std_phasetable";
+				};
+
+			};
+
+
+		};
+	};
+
+
+//	fragment@3 {
+//		target = <&spidev0>;
+//		__overlay__ {
+//			status = "disabled";
+//		};
+//	};
+//
+//	fragment@4 {
+//		target = <&spidev1>;
+//		__overlay__ {
+//			status = "disabled";
+//		};
+//	};
+//
+//	__overrides__ {
+//		cs0_pin = <&frag0>,"brcm,pins:0",
+//			  <&frag1>,"cs-gpios:4";
+//		cs1_pin = <&frag0>,"brcm,pins:4",
+//			  <&frag1>,"cs-gpios:16";
+//		cs2_pin = <&frag0>,"brcm,pins:8",
+//			  <&frag1>,"cs-gpios:28";
+//	};
+
+//	fragment@6 {
+//		target = <&i2c1>;
+//		__overlay__ {
+//			#address-cells = <1>;
+//			#size-cells = <0>;
+//			status = "okay";
+//
+//			ad5696r@4c {
+//				compatible = "adi,ad5693r";
+//				clock-frequency = <400000>;
+//				reg = <0x4c>;
+//			};
+//		};
+//	};
+};
