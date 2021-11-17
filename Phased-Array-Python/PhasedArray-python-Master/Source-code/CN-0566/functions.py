@@ -7,28 +7,32 @@ from project_config import *
 def sdr_init(my_pluto, my_pll):
 
     if sw_tx == 2:
-        # move to fdd mode.  see https://github.com/analogdevicesinc/pyadi-iio/blob/ensm-example/examples/ad9361_advanced_ensm.py
+        # move to fdd mode.  see https://github.com/analogdevicesinc/pyadi-iio/blob/ensm-example/examples
+        # /ad9361_advanced_ensm.py
         my_pluto._ctrl.debug_attrs["adi,frequency-division-duplex-mode-enable"].value = "1"
         my_pluto._ctrl.debug_attrs[
             "adi,ensm-enable-txnrx-control-enable"].value = "0"  # Disable pin control so spi can move the states
         my_pluto._ctrl.debug_attrs["initialize"].value = "1"
         my_pluto.rx_enabled_channels = [0, 1]  # enable Rx1 (voltage0) and Rx2 (voltage1)
-        my_pluto.gain_control_mode_chan1 = 'manual'  # We must be in manual gain control mode (otherwise we won't see the peaks and nulls!)
+        my_pluto.gain_control_mode_chan1 = 'manual'  # We must be in manual gain control mode (otherwise we won't see
+        # the peaks and nulls!)
         my_pluto.rx_hardwaregain_chan1 = 30
-        #     my_pluto.dds_single_tone(int(0.0e6), 0.9, 1)  # my_pluto.dds_single_tone(tone_freq_hz, tone_scale_0to1, tx_channel)
+        #  my_pluto.dds_single_tone(int(0.0e6), 0.9, 1)
+        # my_pluto.dds_single_tone(tone_freq_hz, tone_scale_0to1, tx_channel)
 
-
-    my_pluto._rxadc.set_kernel_buffers_count(1)  # Default is 4 Rx buffers are stored, but we want to change and immediately measure the result, so buffers=1
+    # Default is 4 Rx buffers are stored, but we want to change and immediately measure the result, so buffers=1
+    my_pluto._rxadc.set_kernel_buffers_count(1)
     rx = my_pluto._ctrl.find_channel('voltage0')
     rx.attrs['quadrature_tracking_en'].value = '1'  # set to '1' to enable quadrature tracking
     my_pluto.sample_rate = int(2000000)  # Sampling rate
     my_pluto.rx_buffer_size = int(4 * 256)
     my_pluto.rx_rf_bandwidth = int(10e6)
-    my_pluto.gain_control_mode_chan0 = 'manual'  # We must be in manual gain control mode (otherwise we won't see the peaks and nulls!)
+    # We must be in manual gain control mode (otherwise we won't see the peaks and nulls!)
+    my_pluto.gain_control_mode_chan0 = 'manual'
     my_pluto.rx_hardwaregain_chan0 = 30
     my_pluto.rx_lo = 2000000000  # 4495000000  # Recieve Freq
-    #     my_pluto.dds_single_tone(int(0.0e6), 0.9, 0)  # my_pluto.dds_single_tone(tone_freq_hz, tone_scale_0to1, tx_channel)
-
+    #  my_pluto.dds_single_tone(int(0.0e6), 0.9, 0)
+    #  my_pluto.dds_single_tone(tone_freq_hz, tone_scale_0to1, tx_channel)
 
     if tx_source == "adf4159":
         my_pll.frequency = 6247500000
@@ -37,13 +41,16 @@ def sdr_init(my_pluto, my_pll):
         my_pll.freq_dev_time = 0
         my_pll.enable = 0
         my_pll.ramp_mode = "disabled"
+
     else:
         my_pluto.tx_lo = 6000000000
         my_pluto.tx_cyclic_buffer = True
         my_pluto._tx_buffer_size = int(2 ** 18)
-        my_pluto.tx_hardwaregain_chan0 = -10  # Make sure the Tx channels are attenuated (or off) and their freq is far away from Rx
-        my_pluto.tx_hardwaregain_chan1 = -10
         my_pluto.rx_lo = 4495000000  # Recieve Freq
+        # Make sure the Tx channels are attenuated (or off) and their freq is far away from Rx
+        my_pluto.tx_hardwaregain_chan0 = -10
+        if sw_tx == 2:
+            my_pluto.tx_hardwaregain_chan1 = -10
 
 
 def ADAR_init(beam):
@@ -118,8 +125,6 @@ def ADAR_set_RxTaper(beam):
         # Set the gain depending on the device mode
         if device_mode == "rx":  # If you try to read device mode from device i.e. beam.mode it throws error.
             channel.rx_gain = rx_gain[i]  # rx_gain array defined in project_config file.
-#             print(channel, channel.rx_gain)
-            time.sleep(0.1)
             i += 1
         else:
             channel.tx_gain = rx_gain[i]
@@ -148,7 +153,6 @@ def ADAR_set_RxPhase(beam, Ph_Diff, beam_no):
         Phase_D = ((np.rint(Ph_Diff * 7 / phase_step_size) * phase_step_size) + Rx8_Phase_Cal) % 360
     channel_phase_value = [Phase_A, Phase_B, Phase_C, Phase_D]
 #     print(channel_phase_value)
-
 
     i = 0
     for channel in beam.channels:
@@ -373,6 +377,194 @@ def ADAR_Plotter(beam_list, sdr):
             plt.pause(0.05)
             time.sleep(0.05)
             print(angle[gain.index(max(gain))])  # This givens angle frequency source
+
+
+def Phase_calibration(beam_list, sdr):
+
+    for cal_element in range(1,8):
+        if cal_element == 1:
+            beam0_cal = [0x7F, 0x7F, 0, 0]
+            beam1_cal = [0, 0, 0, 0]
+
+        elif cal_element == 2:
+            beam0_cal = [0, 0x7F, 0x7F, 0]
+            beam1_cal = [0, 0, 0, 0]
+
+        elif cal_element == 3:
+            beam0_cal = [0, 0, 0x7F, 0x7F]
+            beam1_cal = [0, 0, 0, 0]
+
+        elif cal_element == 4:
+            beam0_cal = [0, 0, 0, 0x7F]
+            beam1_cal = [0x7F, 0, 0, 0]
+
+        elif cal_element == 5:
+            beam0_cal = [0, 0, 0, 0]
+            beam1_cal = [0x7F, 0x7F, 0, 0]
+
+        elif cal_element == 6:
+            beam0_cal = [0, 0, 0, 0]
+            beam1_cal = [0, 0x7F, 0x7F, 0]
+
+        elif cal_element == 7:
+            beam0_cal = [0, 0, 0, 0]
+            beam1_cal = [0, 0, 0x7F, 0x7F]
+
+        for beam in beam_list:
+            i = 0  # Gain of Individual channel
+            for channel in beam.channels:
+                if beam == beam_list[0]:
+                    channel.rx_gain = beam0_cal[i]
+                elif beam == beam_list[1]:
+                    channel.rx_gain = beam1_cal[i]
+                i += 1
+            beam.latch_rx_settings()  # writes 0x01 to reg 0x28
+
+        cal_val = cal_plot(beam_list, sdr, cal_element)
+        calibrated_values.append(cal_val)
+    print(calibrated_values)
+
+
+def cal_plot(beam_list, sdr, cal_element):
+
+    PhaseValues = np.arange(-196.875, 196.875,phase_step_size)
+    max_signal = -100000  # Reset max_signal.  We'll keep track of the maximum signal we get as we do this 140 loop.
+    gain = []
+    delta = []
+    beam_phase = []
+    angle = []
+    diff_error = []
+    for PhDelta in PhaseValues:
+
+        ADAR_set_CalRxPhase(beam_list, PhDelta, cal_element)
+        value1 = (c * np.radians(np.abs(PhDelta))) / (2 * 3.14159 * SignalFreq * d)
+        clamped_value1 = max(min(1, value1),
+                             -1)  # arcsin argument must be between 1 and -1, or numpy will throw a warning
+        theta = np.degrees(np.arcsin(clamped_value1))
+        if PhDelta >= 0:
+            SteerAngle = theta  # positive PhaseDelta covers 0deg to 90 deg
+        else:
+            SteerAngle = -theta  # negative phase delta covers 0 deg to -90 deg
+
+        total_sum = 0
+        total_delta = 0
+        total_angle = 0
+        for count in range(0, 5):  # repeat loop and average the results
+            data = sdr.rx()  # read a buffer of data from Pluto using pyadi-iio library (adi.py)
+            chan1 = data[0]
+            chan2 = data[1]
+            sum_chan = chan1 + chan2
+            delta_chan = chan1 - chan2
+            N = len(sum_chan)  # number of samples  len(sum_chan) = 1 as just 1st element of list is taken
+            win = np.blackman(N)
+            y_sum = sum_chan * win
+            y_delta = delta_chan * win
+
+            sp = np.absolute(np.fft.fft(y_sum))
+            sp = sp[1:-1]
+            s_sum = np.fft.fftshift(sp)
+
+            dp = np.absolute(np.fft.fft(y_delta))
+            dp = dp[1:-1]
+            s_delta = np.fft.fftshift(dp)
+
+            max_index = np.argmax(s_sum)
+            total_angle = total_angle + (np.angle(s_sum[max_index]) - np.angle(s_delta[max_index]))
+
+            s_mag_sum = np.abs(s_sum[max_index]) * 2 / np.sum(win)
+            s_mag_delta = np.abs(s_delta[max_index]) * 2 / np.sum(win)
+            s_mag_sum = np.maximum(s_mag_sum, 10 ** (-15))
+            s_mag_delta = np.maximum(s_mag_delta, 10 ** (-15))
+            s_dbfs_sum = 20 * np.log10(
+                s_mag_sum / (2 ** 12))  # make sure the log10 argument isn't zero (hence np.max)
+            s_dbfs_delta = 20 * np.log10(
+                s_mag_delta / (2 ** 12))  # make sure the log10 argument isn't zero (hence np.max)
+            total_sum = total_sum + (s_dbfs_sum)  # sum up all the loops, then we'll average
+            total_delta = total_delta + (s_dbfs_delta)  # sum up all the loops, then we'll average
+        PeakValue_sum = total_sum / 5
+        PeakValue_delta = total_delta / 5
+        PeakValue_angle = total_angle / 5
+
+        if np.sign(PeakValue_angle) == -1:
+            target_error = min(-0.01, (
+                    np.sign(PeakValue_angle) * (PeakValue_sum - PeakValue_delta) + np.sign(
+                PeakValue_angle) * (PeakValue_sum + PeakValue_delta) / 2) / (
+                                       PeakValue_sum + PeakValue_delta))
+        else:
+            target_error = max(0.01, (
+                    np.sign(PeakValue_angle) * (PeakValue_sum - PeakValue_delta) + np.sign(
+                PeakValue_angle) * (PeakValue_sum + PeakValue_delta) / 2) / (
+                                       PeakValue_sum + PeakValue_delta))
+
+        if PeakValue_sum > max_signal:  # take the largest value, so that we know where to point the compass
+            max_signal = PeakValue_sum
+            # max_angle = PeakValue_angle
+            # max_PhDelta = PhDelta
+            # data_fft = sum_chan
+        gain.append(PeakValue_sum)
+        delta.append(PeakValue_delta)
+        beam_phase.append(PeakValue_angle)
+        angle.append(SteerAngle)
+        diff_error.append(target_error)
+    # ArrayGain = gain
+    # ArrayDelta = delta
+    # ArrayBeamPhase = beam_phase
+    # ArrayAngle = angle
+    # ArrayError = diff_error
+    # peak_gain = max(ArrayGain)
+    # index_peak_gain = np.where(ArrayGain == peak_gain)
+    # index_peak_gain = index_peak_gain[0]
+    # max_angle = ArrayAngle[int(index_peak_gain[0])]
+    # plt.clf()
+    # #             plt.plot(xf/1e6, max_gain)
+    # plt.scatter(ArrayAngle,
+    # ArrayGain)  # Gain plots sum_chan. Delta plots the difference and Error plots the diff of sum & delta chans
+    # plt.show()
+    return angle[gain.index(min(gain))]  # This givens angle frequency source
+
+
+def ADAR_set_CalRxPhase(beam_list, Ph_Diff, cal_element):
+
+    Phase_1 = (np.rint(Ph_Diff * 1 / phase_step_size) * phase_step_size) % 360
+    Phase_2 = Phase_1 - 180
+
+    if cal_element == 1:
+        beam0_ph = [Phase_2, Phase_1, 0, 0]
+        beam1_ph = [0, 0, 0, 0]
+
+    elif cal_element == 2:
+        beam0_ph = [0, Phase_2, Phase_1, 0]
+        beam1_ph = [0, 0, 0, 0]
+
+    elif cal_element == 3:
+        beam0_ph = [0, 0, Phase_2, Phase_1]
+        beam1_ph = [0, 0, 0, 0]
+
+    elif cal_element == 4:
+        beam0_ph = [0, 0, 0, Phase_2]
+        beam1_ph = [Phase_1, 0, 0, 0]
+
+    elif cal_element == 5:
+        beam0_ph = [0, 0, 0, 0]
+        beam1_ph = [Phase_1, Phase_2, 0, 0]
+
+    elif cal_element == 6:
+        beam0_ph = [0, 0, 0, 0]
+        beam1_ph = [0, Phase_1, Phase_2, 0]
+
+    elif cal_element == 7:
+        beam0_ph = [0, 0, 0, 0]
+        beam1_ph = [0, 0, Phase_1, Phase_2]
+
+    for beam in beam_list:
+        i = 0  # Gain of Individual channel
+        for channel in beam.channels:
+            if beam == beam_list[0]:
+                channel.rx_phase = beam0_ph[i]
+            elif beam == beam_list[1]:
+                channel.rx_phase = beam1_ph[i]
+            i += 1
+        beam.latch_rx_settings()
 
 
 def save_variable(var):
