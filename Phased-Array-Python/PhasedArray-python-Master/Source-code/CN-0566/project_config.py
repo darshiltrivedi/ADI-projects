@@ -21,13 +21,5 @@ rx_gain = [0x7F, 0x7F, 0x7F, 0x7F]  # gain of individual channel
 # set gai of one of the channel to max and rest others to 0 plot the graph and check for gain at boardside
 # make relative values same for all, That is gain equal to minimum value.
 calibrated_values = []
-
-# Phase Calibration values
-Rx1_Phase_Cal = 0
-Rx2_Phase_Cal = 0  # - 5.122880751507625
-Rx3_Phase_Cal = 0  # - 5.979582841977945
-Rx4_Phase_Cal = 0  # + 12.025565649619162
-Rx5_Phase_Cal = 0  # - 13.775144198365235
-Rx6_Phase_Cal = 0  # - 15.537924981940996
-Rx7_Phase_Cal = 0  # + 3.4127227704196623
-Rx8_Phase_Cal = 0  # - 14.654761615470326
+gcalibrated_values = []
+gcal = []
