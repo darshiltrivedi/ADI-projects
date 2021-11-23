@@ -11,7 +11,7 @@ except:
 
 
 def sdr_init(my_pluto, my_pll):
-    if sw_tx == 2:
+    if num_adars == 2:
         # move to fdd mode.  see https://github.com/analogdevicesinc/pyadi-iio/blob/ensm-example/examples
         # /ad9361_advanced_ensm.py
         my_pluto._ctrl.debug_attrs["adi,frequency-division-duplex-mode-enable"].value = "1"
@@ -56,90 +56,90 @@ def sdr_init(my_pluto, my_pll):
         my_pluto.rx_lo = 4495000000  # Recieve Freq
         # Make sure the Tx channels are attenuated (or off) and their freq is far away from Rx
         my_pluto.tx_hardwaregain_chan0 = -10
-        if sw_tx == 2:
+        if num_adars == 2:
             my_pluto.tx_hardwaregain_chan1 = -10
 
 
-def ADAR_init(beam):
+def ADAR_init(adar):
     # Configure ADAR1000
-    # beam.initialize_devices()  # Always Intialize the device 1st as reset is performed at Initialization
+    # adar.initialize_devices()  # Always Intialize the device 1st as reset is performed at Initialization
     # If ADAR1000 array is used initialization work other wise reset each adar individually
-    beam.reset()  # Performs a soft reset of the device (writes 0x81 to reg 0x00)
+    adar.reset()  # Performs a soft reset of the device (writes 0x81 to reg 0x00)
     time.sleep(0.1)
-    beam._ctrl.reg_write(0x400, 0x55)  # This trims the LDO value to approx. 1.8V (to the center of its range)
+    adar._ctrl.reg_write(0x400, 0x55)  # This trims the LDO value to approx. 1.8V (to the center of its range)
 
-    beam.sequencer_enable = False
-    beam.beam_mem_enable = False  # RAM control vs SPI control of the beam state, reg 0x38, bit 6.  False sets bit high and SPI control This code is writing value 40 to reg 38 Next line writes 20 so 60 in all. This is done by single command in SPI writes.
-    beam.bias_mem_enable = False  # RAM control vs SPI control of the bias state, reg 0x38, bit 5.  False sets bit high and SPI control
-    beam.pol_state = False  # Polarity switch state, reg 0x31, bit 0. True outputs -5V, False outputs 0V
-    beam.pol_switch_enable = False  # Enables switch driver for ADTR1107 switch, reg 0x31, bit 3
-    beam.tr_source = 'spi'  # TR source for chip, reg 0x31 bit 2.  'external' sets bit high, 'spi' sets bit low
-    beam.tr_spi = 'rx'  # TR SPI control, reg 0x31 bit 1.  'tx' sets bit high, 'rx' sets bit low
-    beam.tr_switch_enable = True  # Switch driver for external switch, reg0x31, bit 4
-    beam.external_tr_polarity = True  # Sets polarity of TR switch compared to TR state of ADAR1000.  True outputs 0V in Rx mode
+    adar.sequencer_enable = False
+    adar.beam_mem_enable = False  # RAM control vs SPI control of the adar state, reg 0x38, bit 6.  False sets bit high and SPI control This code is writing value 40 to reg 38 Next line writes 20 so 60 in all. This is done by single command in SPI writes.
+    adar.bias_mem_enable = False  # RAM control vs SPI control of the bias state, reg 0x38, bit 5.  False sets bit high and SPI control
+    adar.pol_state = False  # Polarity switch state, reg 0x31, bit 0. True outputs -5V, False outputs 0V
+    adar.pol_switch_enable = False  # Enables switch driver for ADTR1107 switch, reg 0x31, bit 3
+    adar.tr_source = 'spi'  # TR source for chip, reg 0x31 bit 2.  'external' sets bit high, 'spi' sets bit low
+    adar.tr_spi = 'rx'  # TR SPI control, reg 0x31 bit 1.  'tx' sets bit high, 'rx' sets bit low
+    adar.tr_switch_enable = True  # Switch driver for external switch, reg0x31, bit 4
+    adar.external_tr_polarity = True  # Sets polarity of TR switch compared to TR state of ADAR1000.  True outputs 0V in Rx mode
 
-    beam.rx_vga_enable = True  # Enables Rx VGA, reg 0x2E, bit 0.
-    beam.rx_vm_enable = True  # Enables Rx VGA, reg 0x2E, bit 1.
-    beam.rx_lna_enable = True  # Enables Rx LNA, reg 0x2E, bit 2. bit3,4,5,6 enables RX for all the channels
-    beam._ctrl.reg_write(0x2E, 0x7F)  # bit3,4,5,6 enables RX for all the channels. It is never set if not in this line
-    beam.rx_lna_bias_current = 8  # Sets the LNA bias to the middle of its range
-    beam.rx_vga_vm_bias_current = 22  # Sets the VGA and vector modulator bias.  I thought this should be 22d, but Stingray has it as 85d????
+    adar.rx_vga_enable = True  # Enables Rx VGA, reg 0x2E, bit 0.
+    adar.rx_vm_enable = True  # Enables Rx VGA, reg 0x2E, bit 1.
+    adar.rx_lna_enable = True  # Enables Rx LNA, reg 0x2E, bit 2. bit3,4,5,6 enables RX for all the channels
+    adar._ctrl.reg_write(0x2E, 0x7F)  # bit3,4,5,6 enables RX for all the channels. It is never set if not in this line
+    adar.rx_lna_bias_current = 8  # Sets the LNA bias to the middle of its range
+    adar.rx_vga_vm_bias_current = 22  # Sets the VGA and vector modulator bias.  I thought this should be 22d, but Stingray has it as 85d????
 
-    beam.tx_vga_enable = True  # Enables Tx VGA, reg 0x2F, bit0
-    beam.tx_vm_enable = True  # Enables Tx Vector Modulator, reg 0x2F, bit1
-    beam.tx_pa_enable = True  # Enables Tx channel drivers, reg 0x2F, bit2
-    beam.tx_pa_bias_current = 6  # Sets Tx driver bias current
-    beam.tx_vga_vm_bias_current = 22  # Sets Tx VGA and VM bias.  I thought this should be 22d, but stingray has as 45d??????
+    adar.tx_vga_enable = True  # Enables Tx VGA, reg 0x2F, bit0
+    adar.tx_vm_enable = True  # Enables Tx Vector Modulator, reg 0x2F, bit1
+    adar.tx_pa_enable = True  # Enables Tx channel drivers, reg 0x2F, bit2
+    adar.tx_pa_bias_current = 6  # Sets Tx driver bias current
+    adar.tx_vga_vm_bias_current = 22  # Sets Tx VGA and VM bias.  I thought this should be 22d, but stingray has as 45d??????
 
     if device_mode == "rx":
         # Configure the device for Rx mode
-        beam.mode = "rx"  # Mode of operation, bit 5 of reg 0x31. "rx", "tx", or "disabled".
+        adar.mode = "rx"  # Mode of operation, bit 5 of reg 0x31. "rx", "tx", or "disabled".
 
         SELF_BIASED_LNAs = True
         if SELF_BIASED_LNAs:
             # Allow the external LNAs to self-bias
-            beam.lna_bias_out_enable = False  # this writes 0xA0 0x30 0x00.  What does this do? # Disabling it allows LNAs to stay in self bias mode all the time
-            # beam._ctrl.reg_write(0x30, 0x00)   #Disables PA and DAC bias
+            adar.lna_bias_out_enable = False  # this writes 0xA0 0x30 0x00.  What does this do? # Disabling it allows LNAs to stay in self bias mode all the time
+            # adar._ctrl.reg_write(0x30, 0x00)   #Disables PA and DAC bias
         else:
             # Set the external LNA bias
-            beam.lna_bias_on = -0.7  # this writes 0x25 to register 0x2D.  This is correct.  But oddly enough, it doesn't first write 0x18 to reg 0x00....
-            # beam._ctrl.reg_write(0x30, 0x20)   #Enables PA and DAC bias.  I think this would be needed too?
+            adar.lna_bias_on = -0.7  # this writes 0x25 to register 0x2D.  This is correct.  But oddly enough, it doesn't first write 0x18 to reg 0x00....
+            # adar._ctrl.reg_write(0x30, 0x20)   #Enables PA and DAC bias.  I think this would be needed too?
 
         # Enable the Rx path for each channel
-        for channel in beam.channels:
+        for channel in adar.channels:
             channel.rx_enable = True  # this writes reg0x2E with data 0x00, then reg0x2E with data 0x20.  So it overwrites 0x2E, and enables only one channel
-            # beam._ctrl.reg_write(0x2E, 0x7F)    #Enables all four Rx channels, the Rx LNA, Rx Vector Modulator and Rx VGA
+            # adar._ctrl.reg_write(0x2E, 0x7F)    #Enables all four Rx channels, the Rx LNA, Rx Vector Modulator and Rx VGA
 
     # Configure the device for Tx mode
     else:
-        beam.mode = "tx"
+        adar.mode = "tx"
 
         # Enable the Tx path for each channel and set the external PA bias
-        for channel in beam.channels:
+        for channel in adar.channels:
             channel.tx_enable = True
             channel.pa_bias_on = -2
 
     if device_mode == "rx":
-        beam.latch_rx_settings()  # writes 0x01 to reg 0x28.
+        adar.latch_rx_settings()  # writes 0x01 to reg 0x28.
     else:
-        beam.latch_tx_settings()  # writes 0x02 to reg 0x28.
+        adar.latch_tx_settings()  # writes 0x02 to reg 0x28.
 
 
-def ADAR_set_RxTaper(beam_list):
+def ADAR_set_gain(adar_list):
     # Set the gains to max gain (0x7f, or 127)
-    for beam in beam_list:
+    for adar in adar_list:
         i = 0  # Gain of Individual channel
-        for channel in beam.channels:
-            if beam == beam_list[0]:
+        for channel in adar.channels:
+            if adar == adar_list[0]:
                 channel.rx_gain = cal_gain0[i]
-            elif beam == beam_list[1]:
+            elif adar == adar_list[1]:
                 channel.rx_gain = cal_gain1[i]
             i += 1
-        beam.latch_rx_settings()  # writes 0x01 to reg 0x28
+        adar.latch_rx_settings()  # writes 0x01 to reg 0x28
 
 
-def ADAR_set_RxPhase(beam, Ph_Diff, beam_no):
-    if beam_no == 1:
+def ADAR_set_RxPhase(adar, Ph_Diff, adar_no):
+    if adar_no == 1:
         Phase_A = ((np.rint(
             Ph_Diff * 0 / phase_step_size) * phase_step_size) + Rx1_Phase_Cal) % 360  # round each value to the nearest step size increment
         Phase_B = ((np.rint(
@@ -147,7 +147,7 @@ def ADAR_set_RxPhase(beam, Ph_Diff, beam_no):
         Phase_C = ((np.rint(Ph_Diff * 2 / phase_step_size) * phase_step_size) + Rx3_Phase_Cal) % 360
         Phase_D = ((np.rint(Ph_Diff * 3 / phase_step_size) * phase_step_size) + Rx4_Phase_Cal) % 360
 
-    elif beam_no == 2:
+    elif adar_no == 2:
         Phase_A = ((np.rint(Ph_Diff * 4 / phase_step_size) * phase_step_size) + Rx5_Phase_Cal) % 360
         Phase_B = ((np.rint(Ph_Diff * 5 / phase_step_size) * phase_step_size) + Rx6_Phase_Cal) % 360
         Phase_C = ((np.rint(Ph_Diff * 6 / phase_step_size) * phase_step_size) + Rx7_Phase_Cal) % 360
@@ -156,20 +156,20 @@ def ADAR_set_RxPhase(beam, Ph_Diff, beam_no):
     #     print(channel_phase_value)
 
     i = 0
-    for channel in beam.channels:
+    for channel in adar.channels:
         # Set phase depending on the device mode
         if device_mode == "rx":
             channel.rx_phase = channel_phase_value[
                 i]  # writes to I and Q registers values according to Table 13-16 from datasheet.
         i = i + 1
     if device_mode == "rx":
-        beam.latch_rx_settings()
+        adar.latch_rx_settings()
     else:
-        beam.latch_tx_settings()
+        adar.latch_tx_settings()
 
 
-def ADAR_Plotter(beam_list, sdr):
-    if sw_tx == 2:
+def ADAR_Plotter(adar_list, sdr):
+    if num_adars == 2:
         while True:
 
             PhaseValues = np.arange(-196.875, 196.875,
@@ -183,10 +183,10 @@ def ADAR_Plotter(beam_list, sdr):
             angle = []
             diff_error = []
             for PhDelta in PhaseValues:
-                beam_no = 1
-                for i in range(0, len(beam_list)):  # Set Phase Values of all the adar1000 connected.
-                    ADAR_set_RxPhase(beam_list[i], PhDelta, beam_no)
-                    beam_no = 2
+                adar_no = 1
+                for i in range(0, len(adar_list)):  # Set Phase Values of all the adar1000 connected.
+                    ADAR_set_RxPhase(adar_list[i], PhDelta, adar_no)
+                    adar_no = 2
 
                 value1 = (c * np.radians(np.abs(PhDelta))) / (2 * 3.14159 * SignalFreq * d)
                 clamped_value1 = max(min(1, value1),
@@ -290,7 +290,7 @@ def ADAR_Plotter(beam_list, sdr):
             time.sleep(0.05)
             print(angle[gain.index(max(gain))])  # This givens angle frequency source
 
-    elif sw_tx == 1:
+    elif num_adars == 1:
         while True:
             # Write code for plotting o/p using single channel
             # We have to step gain over hear. For now it is fixed gain and set in main function
@@ -311,10 +311,10 @@ def ADAR_Plotter(beam_list, sdr):
             max_gain = []
             max_signal = -100000
             max_angle = -90
-            beam_no = 1
+            adar_no = 1
             for PhDelta in PhaseValues:
-                for i in range(0, len(beam_list)):  # change according to number of adar1000 connected
-                    ADAR_set_RxPhase(beam_list[i], PhDelta, beam_no)
+                for i in range(0, len(adar_list)):  # change according to number of adar1000 connected
+                    ADAR_set_RxPhase(adar_list[i], PhDelta, adar_no)
 
                 value1 = (c * np.radians(np.abs(PhDelta))) / (2 * 3.14159 * SignalFreq * d)
                 #  - sdr.tx_rf_bandwidth * 1000
@@ -381,7 +381,7 @@ def ADAR_Plotter(beam_list, sdr):
             print(angle[gain.index(max(gain))])  # This givens angle frequency source
 
 
-def Phase_calibration(beam_list, sdr):
+def Phase_calibration(adar_list, sdr):
     for cal_element in range(1, 8):
         if cal_element == 1:
             beam0_cal = [0x7F, 0x7F, 0, 0]
@@ -411,17 +411,17 @@ def Phase_calibration(beam_list, sdr):
             beam0_cal = [0, 0, 0, 0]
             beam1_cal = [0, 0, 0x7F, 0x7F]
 
-        for beam in beam_list:
+        for adar in adar_list:
             i = 0  # Gain of Individual channel
-            for channel in beam.channels:
-                if beam == beam_list[0]:
+            for channel in adar.channels:
+                if adar == adar_list[0]:
                     channel.rx_gain = beam0_cal[i]
-                elif beam == beam_list[1]:
+                elif adar == adar_list[1]:
                     channel.rx_gain = beam1_cal[i]
                 i += 1
-            beam.latch_rx_settings()  # writes 0x01 to reg 0x28
+            adar.latch_rx_settings()  # writes 0x01 to reg 0x28
 
-        cal_val = cal_plot(beam_list, sdr, cal_element)
+        cal_val = phase_cal_plot(adar_list, sdr, cal_element)
         calibrated_values.append(-1 * cal_val)
     calibrated_values[1] = calibrated_values[1] + calibrated_values[0]
     calibrated_values[2] = calibrated_values[2] + calibrated_values[1]
@@ -454,7 +454,7 @@ def Phase_calibration(beam_list, sdr):
             f.write('\nRx8_Phase_Cal = {}'.format(calibrated_values[6]))
 
 
-def cal_plot(beam_list, sdr, cal_element):
+def phase_cal_plot(adar_list, sdr, cal_element):
     PhaseValues = np.arange(-196.875, 196.875, phase_step_size)
     max_signal = -100000  # Reset max_signal.  We'll keep track of the maximum signal we get as we do this 140 loop.
     gain = []
@@ -464,7 +464,7 @@ def cal_plot(beam_list, sdr, cal_element):
     diff_error = []
     for PhDelta in PhaseValues:
 
-        ADAR_set_CalRxPhase(beam_list, PhDelta, cal_element)
+        ADAR_set_CalRxPhase(adar_list, PhDelta, cal_element)
         value1 = (c * np.radians(np.abs(PhDelta))) / (2 * 3.14159 * SignalFreq * d)
         clamped_value1 = max(min(1, value1),
                              -1)  # arcsin argument must be between 1 and -1, or numpy will throw a warning
@@ -551,7 +551,7 @@ def cal_plot(beam_list, sdr, cal_element):
     return angle[gain.index(min(gain))]  # This givens angle frequency source
 
 
-def ADAR_set_CalRxPhase(beam_list, Ph_Diff, cal_element):
+def ADAR_set_CalRxPhase(adar_list, Ph_Diff, cal_element):
     Phase_1 = (np.rint(Ph_Diff * 1 / phase_step_size) * phase_step_size) % 360
     Phase_2 = Phase_1 - 180
 
@@ -583,18 +583,18 @@ def ADAR_set_CalRxPhase(beam_list, Ph_Diff, cal_element):
         beam0_ph = [0, 0, 0, 0]
         beam1_ph = [0, 0, Phase_1, Phase_2]
 
-    for beam in beam_list:
+    for adar in adar_list:
         i = 0  # Gain of Individual channel
-        for channel in beam.channels:
-            if beam == beam_list[0]:
+        for channel in adar.channels:
+            if adar == adar_list[0]:
                 channel.rx_phase = beam0_ph[i]
-            elif beam == beam_list[1]:
+            elif adar == adar_list[1]:
                 channel.rx_phase = beam1_ph[i]
             i += 1
-        beam.latch_rx_settings()
+        adar.latch_rx_settings()
 
 
-def gain_calibration(beam_list, sdr):
+def gain_calibration(adar_list, sdr):
     for gcal_element in range(1, 9):
         if gcal_element == 1:
             beam0_cal = [0x7F, 0, 0, 0]
@@ -628,17 +628,17 @@ def gain_calibration(beam_list, sdr):
             beam0_cal = [0, 0, 0, 0]
             beam1_cal = [0, 0, 0, 0x7F]
 
-        for beam in beam_list:
+        for adar in adar_list:
             i = 0  # Gain of Individual channel
-            for channel in beam.channels:
-                if beam == beam_list[0]:
+            for channel in adar.channels:
+                if adar == adar_list[0]:
                     channel.rx_gain = beam0_cal[i]
-                elif beam == beam_list[1]:
+                elif adar == adar_list[1]:
                     channel.rx_gain = beam1_cal[i]
                 i += 1
-            beam.latch_rx_settings()  # writes 0x01 to reg 0x28
+            adar.latch_rx_settings()  # writes 0x01 to reg 0x28
 
-        gcal_val = gcal_plot(beam_list, sdr, gcal_element)
+        gcal_val = gain_cal_plot(adar_list, sdr, gcal_element)
         gcalibrated_values.append(gcal_val)
 
     for k in range(0, 8):
@@ -658,7 +658,7 @@ def gain_calibration(beam_list, sdr):
             f.write('\ncal_gain1 = {}'.format(cal_gain1))
 
 
-def gcal_plot(beam_list, sdr, gcal_element):
+def gain_cal_plot(adar_list, sdr, gcal_element):
     PhaseValues = np.arange(-196.875, 196.875, phase_step_size)
     max_signal = -100000  # Reset max_signal.  We'll keep track of the maximum signal we get as we do this 140 loop.
     gain = []
@@ -668,7 +668,7 @@ def gcal_plot(beam_list, sdr, gcal_element):
     diff_error = []
     for PhDelta in PhaseValues:
 
-        ADAR_set_gCalRxPhase(beam_list, PhDelta, gcal_element)
+        ADAR_set_gCalRxPhase(adar_list, PhDelta, gcal_element)
         value1 = (c * np.radians(np.abs(PhDelta))) / (2 * 3.14159 * SignalFreq * d)
         clamped_value1 = max(min(1, value1),
                              -1)  # arcsin argument must be between 1 and -1, or numpy will throw a warning
@@ -755,7 +755,7 @@ def gcal_plot(beam_list, sdr, gcal_element):
     return max(gain)  # This givens angle frequency source
 
 
-def ADAR_set_gCalRxPhase(beam_list, Ph_Diff, gcal_element):
+def ADAR_set_gCalRxPhase(adar_list, Ph_Diff, gcal_element):
     Phase_1 = (np.rint(Ph_Diff * 1 / phase_step_size) * phase_step_size) % 360
     # Phase_2 = Phase_1 - 180
 
@@ -791,12 +791,12 @@ def ADAR_set_gCalRxPhase(beam_list, Ph_Diff, gcal_element):
         beam0_ph = [0, 0, 0, 0]
         beam1_ph = [0, 0, 0, Phase_1]
 
-    for beam in beam_list:
+    for adar in adar_list:
         i = 0  # Gain of Individual channel
-        for channel in beam.channels:
-            if beam == beam_list[0]:
+        for channel in adar.channels:
+            if adar == adar_list[0]:
                 channel.rx_phase = beam0_ph[i]
-            elif beam == beam_list[1]:
+            elif adar == adar_list[1]:
                 channel.rx_phase = beam1_ph[i]
             i += 1
-        beam.latch_rx_settings()
+        adar.latch_rx_settings()
