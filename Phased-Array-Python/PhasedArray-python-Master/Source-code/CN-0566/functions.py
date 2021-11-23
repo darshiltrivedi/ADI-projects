@@ -131,9 +131,15 @@ def ADAR_set_gain(adar_list):
         i = 0  # Gain of Individual channel
         for channel in adar.channels:
             if adar == adar_list[0]:
-                channel.rx_gain = cal_gain0[i]
+                try:
+                    channel.rx_gain = cal_gain0[i]
+                except:
+                    channel.rx_gain = 127
             elif adar == adar_list[1]:
-                channel.rx_gain = cal_gain1[i]
+                try:
+                    channel.rx_gain = cal_gain1[i]
+                except:
+                    channel.rx_gain = 127
             i += 1
         adar.latch_rx_settings()  # writes 0x01 to reg 0x28
 
