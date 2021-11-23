@@ -10,14 +10,14 @@ def main():
     # Select and connect the Transreciever
     if "adf4159" in tx_source:
         pll = adi.adf4159(uri=rpi_ip)
-        if sw_tx == 2:
+        if num_adars == 2:
             sdr = adi.ad9361(uri=lo_ip)
         else:
             sdr = adi.Pluto(uri=lo_ip)
         sdr_init(sdr, pll)
 
     elif "pluto" in tx_source:
-        if sw_tx == 2:
+        if num_adars == 2:
             sdr = adi.ad9361(uri=lo_ip)
             sdr_init(sdr, sdr)
         else:
@@ -29,7 +29,7 @@ def main():
 
     # channel 4 is the third, and channel 3 is the fourth
     # Select and connect the Beamformer/s. Each Beamformer has 4 channels
-    if sw_tx == 2:
+    if num_adars == 2:
         adar = adi.adar1000_array(
             uri=rpi_ip,
             chip_ids=["BEAM0", "BEAM1"],
@@ -50,14 +50,13 @@ def main():
                 1: [2, 1, 4, 3]
             },
         )
-                
-    
-    beam_list = []  # List of Beamformers in order to steup and configure Individually.
+
+    adar_list = []  # List of Beamformers in order to steup and configure Individually.
     for device in adar.devices.values():
-        beam_list.append(device)
+        adar_list.append(device)
 
     # initialize the ADAR1000
-    for adar in beam_list:
+    for adar in adar_list:
         ADAR_init(adar)  # resets the ADAR1000, then reprograms it to the standard config/ Known state
 #         ADAR_set_RxTaper(adar)  # Set gain of each channel of all beamformer according to the Cal Values
 
@@ -65,18 +64,18 @@ def main():
     if ("yes" or "Yes") in cal:
         mode = input("What type of calibration do you want to do? 'gain' or 'phase' or 'full'\n")
         if "gain" in mode:
-            gain_calibration(beam_list, sdr)
+            gain_calibration(adar_list, sdr)
         elif "phase" in mode:
-            Phase_calibration(beam_list, sdr)
+            Phase_calibration(adar_list, sdr)
         elif "full" in mode:
-            gain_calibration(beam_list, sdr)
-            Phase_calibration(beam_list, sdr)
-        for adar in beam_list:
+            gain_calibration(adar_list, sdr)
+            Phase_calibration(adar_list, sdr)
+        for adar in adar_list:
             ADAR_init(adar)  # resets the ADAR1000, then reprograms it to the standard config/ Known state
         print("The Calibration is done. Restart the script and continue without calibration.")
         sys.exit()
-    ADAR_set_RxTaper(beam_list)  # Set gain of each channel of all beamformer according to the Cal Values
-    ADAR_Plotter(beam_list, sdr)  # Rx down-converted signal and plot it to get sinc pattern
+    ADAR_set_gain(adar_list)  # Set gain of each channel of all beamformer according to the Cal Values
+    ADAR_Plotter(adar_list, sdr)  # Rx down-converted signal and plot it to get sinc pattern
 
 
 main()
