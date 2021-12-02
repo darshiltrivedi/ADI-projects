@@ -72,8 +72,8 @@ def main():
             Phase_calibration(adar_list, sdr)
         for adar in adar_list:
             ADAR_init(adar)  # resets the ADAR1000, then reprograms it to the standard config/ Known state
-        print("The Calibration is done. Restart the script and continue without calibration.")
-        sys.exit()
+        # print("The Calibration is done. Restart the script and continue without calibration.")
+        # sys.exit()
     ADAR_set_gain(adar_list)  # Set gain of each channel of all beamformer according to the Cal Values
     ADAR_Plotter(adar_list, sdr)  # Rx down-converted signal and plot it to get sinc pattern
 
