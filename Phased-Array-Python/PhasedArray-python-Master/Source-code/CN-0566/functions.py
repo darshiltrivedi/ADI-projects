@@ -1,13 +1,8 @@
 import numpy as np
 import matplotlib.pyplot as plt
 import time
+import pickle
 from project_config import *
-
-try:
-    from gain_cal_val import *
-    from phase_cal_val import *
-except:
-    None
 
 
 def sdr_init(my_pluto, my_pll):
@@ -126,25 +121,29 @@ def ADAR_init(adar):
 
 
 def ADAR_set_gain(adar_list):
+    with open('gain_cal_val.pkl' , 'rb') as file1:
+        cal_gain0, cal_gain1 = pickle.load(file1)
+#     print(cal_gain0 , cal_gain1)
     # Set the gains to max gain (0x7f, or 127)
     for adar in adar_list:
         i = 0  # Gain of Individual channel
         for channel in adar.channels:
             if adar == adar_list[0]:
-                try:
-                    channel.rx_gain = cal_gain0[i]
-                except:
-                    channel.rx_gain = 127
+                channel.rx_gain = cal_gain0[i]
             elif adar == adar_list[1]:
-                try:
-                    channel.rx_gain = cal_gain1[i]
-                except:
-                    channel.rx_gain = 127
+                channel.rx_gain = cal_gain1[i]
             i += 1
         adar.latch_rx_settings()  # writes 0x01 to reg 0x28
 
 
 def ADAR_set_RxPhase(adar, Ph_Diff, adar_no):
+
+    with open('phase_cal_val.pkl', 'rb') as file:
+        Rx1_Phase_Cal, Rx2_Phase_Cal, Rx3_Phase_Cal, Rx4_Phase_Cal, Rx5_Phase_Cal, Rx6_Phase_Cal, Rx7_Phase_Cal, Rx8_Phase_Cal = pickle.load(
+            file)
+
+#     print(Rx1_Phase_Cal, Rx2_Phase_Cal, Rx3_Phase_Cal,Rx4_Phase_Cal,Rx5_Phase_Cal,Rx6_Phase_Cal,Rx7_Phase_Cal,Rx8_Phase_Cal)
+
     if adar_no == 1:
         Phase_A = ((np.rint(
             Ph_Diff * 0 / phase_step_size) * phase_step_size) + Rx1_Phase_Cal) % 360  # round each value to the nearest step size increment
@@ -429,35 +428,32 @@ def Phase_calibration(adar_list, sdr):
 
         cal_val = phase_cal_plot(adar_list, sdr, cal_element)
         calibrated_values.append(-1 * cal_val)
-    calibrated_values[1] = calibrated_values[1] + calibrated_values[0]
-    calibrated_values[2] = calibrated_values[2] + calibrated_values[1]
-    calibrated_values[3] = calibrated_values[3] + calibrated_values[2]
-    calibrated_values[4] = calibrated_values[4] + calibrated_values[3]
-    calibrated_values[5] = calibrated_values[5] + calibrated_values[4]
-    calibrated_values[6] = calibrated_values[6] + calibrated_values[5]
+    calibrated_values[1] = calibrated_values[1] - calibrated_values[0]
+    calibrated_values[2] = calibrated_values[2] - calibrated_values[1]
+    calibrated_values[3] = calibrated_values[3] - calibrated_values[2]
+    calibrated_values[4] = calibrated_values[4] - calibrated_values[3]
+    calibrated_values[5] = calibrated_values[5] - calibrated_values[4]
+    calibrated_values[6] = calibrated_values[6] - calibrated_values[5]
 
     print(calibrated_values)
-    try:
-        with open("phase_cal_val.py", "x") as f:
-            f.write('Rx1_Phase_Cal = 0')
-            f.write('\nRx2_Phase_Cal = {}'.format(calibrated_values[0]))
-            f.write('\nRx3_Phase_Cal = {}'.format(calibrated_values[1]))
-            f.write('\nRx4_Phase_Cal = {}'.format(calibrated_values[2]))
-            f.write('\nRx5_Phase_Cal = {}'.format(calibrated_values[3]))
-            f.write('\nRx6_Phase_Cal = {}'.format(calibrated_values[4]))
-            f.write('\nRx7_Phase_Cal = {}'.format(calibrated_values[5]))
-            f.write('\nRx8_Phase_Cal = {}'.format(calibrated_values[6]))
+    store_phase(calibrated_values)
 
-    except:
-        with open("phase_cal_val.py", "w") as f:
-            f.write('Rx1_Phase_Cal = 0')
-            f.write('\nRx2_Phase_Cal = {}'.format(calibrated_values[0]))
-            f.write('\nRx3_Phase_Cal = {}'.format(calibrated_values[1]))
-            f.write('\nRx4_Phase_Cal = {}'.format(calibrated_values[2]))
-            f.write('\nRx5_Phase_Cal = {}'.format(calibrated_values[3]))
-            f.write('\nRx6_Phase_Cal = {}'.format(calibrated_values[4]))
-            f.write('\nRx7_Phase_Cal = {}'.format(calibrated_values[5]))
-            f.write('\nRx8_Phase_Cal = {}'.format(calibrated_values[6]))
+
+def store_phase(calibrated_values):
+
+    Rx1_Phase_Cal = 0
+    Rx2_Phase_Cal = calibrated_values[0]
+    Rx3_Phase_Cal = calibrated_values[1]
+    Rx4_Phase_Cal = calibrated_values[2]
+    Rx5_Phase_Cal = calibrated_values[3]
+    Rx6_Phase_Cal = calibrated_values[4]
+    Rx7_Phase_Cal = calibrated_values[5]
+    Rx8_Phase_Cal = calibrated_values[6]
+    with open('phase_cal_val.pkl', 'wb') as file:
+        pickle.dump(
+            [Rx1_Phase_Cal, Rx2_Phase_Cal, Rx3_Phase_Cal, Rx4_Phase_Cal, Rx5_Phase_Cal, Rx6_Phase_Cal, Rx7_Phase_Cal,
+             Rx8_Phase_Cal], file)
+        file.close()
 
 
 def phase_cal_plot(adar_list, sdr, cal_element):
@@ -653,15 +649,10 @@ def gain_calibration(adar_list, sdr):
     #     print(gcal)
     cal_gain0 = gcal[:4]
     cal_gain1 = gcal[4:]
-    #     print(cal_gain0 , cal_gain1)
-    try:
-        with open("gain_cal_val.py", "x") as f:
-            f.write('cal_gain0 = {}'.format(cal_gain0))
-            f.write('\ncal_gain1 = {}'.format(cal_gain1))
-    except:
-        with open("gain_cal_val.py", "w") as f:
-            f.write('cal_gain0 = {}'.format(cal_gain0))
-            f.write('\ncal_gain1 = {}'.format(cal_gain1))
+    print(cal_gain0 , cal_gain1)
+    with open('gain_cal_val.pkl' , 'wb') as file1:
+        pickle.dump([cal_gain0, cal_gain1], file1)
+        file1.close()
 
 
 def gain_cal_plot(adar_list, sdr, gcal_element):
