@@ -6,6 +6,8 @@ from PyQt5 import QtCore, QtGui, QtWidgets, uic
 from PyQt5.QtWidgets import *
 from PyQt5.QtCore import *
 
+# This is a seprate Pluto whose tx is connected back to Rx and will be used in session 2.
+# For Now, while I am testing I made this global as I have a seprate pluto on my work bench connected to RPI
 pluto_ss2 = adi.Pluto(uri="ip:192.168.2.1")  # Pluto on RPI doesn't work with pyadi
 
 class MyWindow(QtWidgets.QMainWindow):
