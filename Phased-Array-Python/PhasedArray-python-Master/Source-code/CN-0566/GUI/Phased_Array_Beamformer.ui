@@ -4278,7 +4278,7 @@ p, li { white-space: pre-wrap; }
      <attribute name="title">
       <string>Rectangular Plot</string>
      </attribute>
-     <widget class="QWidget" name="rplot_display" native="true">
+     <widget class="MplWidget" name="rplot_display" native="true">
       <property name="geometry">
        <rect>
         <x>0</x>
@@ -4293,7 +4293,7 @@ p, li { white-space: pre-wrap; }
      <attribute name="title">
       <string>Polar Plot</string>
      </attribute>
-     <widget class="QWidget" name="pplot_display" native="true">
+     <widget class="MplWidget" name="pplot_display" native="true">
       <property name="geometry">
        <rect>
         <x>0</x>
@@ -4308,7 +4308,7 @@ p, li { white-space: pre-wrap; }
      <attribute name="title">
       <string>FFT at Peak Steering Angle</string>
      </attribute>
-     <widget class="QWidget" name="fft_psa_display" native="true">
+     <widget class="MplWidget" name="fft_psa_display" native="true">
       <property name="geometry">
        <rect>
         <x>0</x>
@@ -4323,7 +4323,7 @@ p, li { white-space: pre-wrap; }
      <attribute name="title">
       <string>SDR FFT</string>
      </attribute>
-     <widget class="QWidget" name="fft_sdr_display" native="true">
+     <widget class="MplWidget" name="fft_sdr_display" native="true">
       <property name="geometry">
        <rect>
         <x>0</x>
@@ -4580,6 +4580,14 @@ p, li { white-space: pre-wrap; }
    <zorder>calibrate_group</zorder>
   </widget>
  </widget>
+ <customwidgets>
+  <customwidget>
+   <class>MplWidget</class>
+   <extends>QWidget</extends>
+   <header>mplwidget.h</header>
+   <container>1</container>
+  </customwidget>
+ </customwidgets>
  <resources/>
  <connections>
   <connection>
