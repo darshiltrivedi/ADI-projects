@@ -70,12 +70,14 @@ class beamformer(adar1000_array):
         self.phase_step_size = 2.8125  # it is 360/2**number of bits. For now number of bits == 6. change later
         self.steer_res = 2.8125  # It is steering resolution. This would be user selected value
         self.c = 299792458  # speed of light in m/s
-        self.d = 0.015  # element to element spacing of the antenna
+        self.element_spacing = 0.015  # element to element spacing of the antenna
         self.res_bits = 1  # res_bits and bits are two different vaiable. It can be variable but it is hardset to 1 for now
         self.calibrated_values = []
         self.gcalibrated_values = []
         self.gcal = []  # [0x7F for i in range(0, 4*len(list(self.devices.values())))]
         self.rx_dev = None
+        self.gain_cal = False
+        self.phase_cal = False
 
     # This method configure the device beamformer props like RAM bypass, Transreciever source etc., based on device mode
     def configure(self, device_mode=""):
@@ -201,6 +203,7 @@ class beamformer(adar1000_array):
       and set them. If we want beam angle at fixed angle you can pass angle value at which you want center lobe"""
 
     def set_beam_angle(self, Ph_Diff):
+        self.load_phase('phase_cal_val.pkl')
         adar_list = list(self.devices.values())
         j = 0
         for adar in adar_list:
@@ -223,10 +226,8 @@ class beamformer(adar1000_array):
                 adar.latch_tx_settings()
 
     """ This method is not complete yet. It plots a graph directly for now. This method calls set_beam_angle and 
-        sets the Phases of all channel. This is very similar to __gcal_plot and __pcal_plot the only difference is those 
-        two methods calls different method to set the phase of channel according to calibration routine. 
-        Thus this 3 methods have lot of redundant code find out a way to eliminate this redundant code"""
-    def calculate_plot(self):
+        sets the Phases of all channel."""
+    def __calculate_plot(self, gcal_element=0, cal_element=0):
         # self.load_phase('phase_cal_val.pkl')
         PhaseValues = np.arange(-196.875, 196.875,
                                 self.phase_step_size)  # These are all the phase deltas (i.e. phase difference between Rx1 and Rx2, then Rx2 and Rx3, etc.) we'll sweep.
@@ -239,8 +240,13 @@ class beamformer(adar1000_array):
         angle = []
         diff_error = []
         for PhDelta in PhaseValues:  # This sweeps phase value from -180 to 180
-            self.set_beam_angle(PhDelta)
-            value1 = (self.c * np.radians(np.abs(PhDelta))) / (2 * 3.14159 * self.SignalFreq * self.d)
+            if self.gain_cal:
+                self.__set_gain_phase(PhDelta, gcal_element)
+            if self.phase_cal:
+                self.__set_phase_phase(PhDelta, cal_element)
+            if not self.gain_cal and not self.phase_cal:
+                self.set_beam_angle(PhDelta)
+            value1 = (self.c * np.radians(np.abs(PhDelta))) / (2 * 3.14159 * self.SignalFreq * self.element_spacing)
             clamped_value1 = max(min(1, value1),
                                  -1)  # arcsin argument must be between 1 and -1, or numpy will throw a warning
             theta = np.degrees(np.arcsin(clamped_value1))
@@ -323,17 +329,18 @@ class beamformer(adar1000_array):
         ts = 1 / float(self.rx_dev.sample_rate)
         xf = np.fft.fftfreq(NumSamples, ts)
         xf = np.fft.fftshift(xf[1:-1])  # this is the x axis (freq in Hz) for our fft plot
-        ArrayGain = gain
-        ArrayAngle = angle
-        plt.clf()
-        #             plt.plot(xf/1e6, max_gain)
-        plt.scatter(ArrayAngle,
-                    ArrayGain)  # Gain plots sum_chan. Delta plots the difference and Error plots the diff of sum & delta chans
-        plt.show()
-        return angle[gain.index(max(gain))]  # This givens angle frequency source
+        # ArrayGain = gain
+        # ArrayAngle = angle
+        if self.gain_cal:
+            return max(gain)
+        if self.phase_cal:
+            return angle[gain.index(min(gain))]
+        if not self.gain_cal and not self.phase_cal:
+            return gain, angle
 
     # This method starts the Gain Cal routine
     def gain_calibration(self):
+        self.gain_cal = True
         for gcal_element in range(0, (4 * len(list(self.devices.values())))):
             beam_cal = [0 for i in range(0, (4 * len(list(self.devices.values()))))]
             beam_cal[gcal_element] = 0x7F
@@ -357,7 +364,7 @@ class beamformer(adar1000_array):
                     device.latch_rx_settings()  # writes 0x01 to reg 0x28
                 elif self.device_mode == 'tx':
                     device.latch_tx_settings()  # writes 0x01 to reg 0x28
-            gcal_val = self.__gcal_plot(gcal_element)
+            gcal_val = self.__calculate_plot(gcal_element=gcal_element)
             self.gcalibrated_values.append(gcal_val)
 
         for k in range(0, 8):
@@ -365,106 +372,7 @@ class beamformer(adar1000_array):
             self.gcal.append(int(x))
         print(self.gcal)
         self.__save_gain_cal()
-
-    # this is similar to calculate plot
-    def __gcal_plot(self, gcal_element):
-        PhaseValues = np.arange(-196.875, 196.875,
-                                self.phase_step_size)  # These are all the phase deltas (i.e. phase difference between Rx1 and Rx2, then Rx2 and Rx3, etc.) we'll sweep.
-        PhaseStepNumber = 0  # this is the number of phase steps we'll take (140 in total).  At each phase step, we set the individual phases of each of the Rx channels
-        max_signal = -100000  # Reset max_signal.  We'll keep track of the maximum signal we get as we do this 140 loop.
-        max_angle = -90  # Reset max_angle.  This is the angle where we saw the max signal.  This is where our compass will point.
-        gain = []
-        delta = []
-        beam_phase = []
-        angle = []
-        diff_error = []
-        for PhDelta in PhaseValues:
-            self.__set_gain_phase(PhDelta, gcal_element)
-            value1 = (self.c * np.radians(np.abs(PhDelta))) / (2 * 3.14159 * self.SignalFreq * self.d)
-            clamped_value1 = max(min(1, value1),
-                                 -1)  # arcsin argument must be between 1 and -1, or numpy will throw a warning
-            theta = np.degrees(np.arcsin(clamped_value1))
-            if PhDelta >= 0:
-                SteerAngle = theta  # positive PhaseDelta covers 0deg to 90 deg
-            else:
-                SteerAngle = -theta  # negative phase delta covers 0 deg to -90 deg
-
-            total_sum = 0
-            total_delta = 0
-            total_angle = 0
-            for count in range(0, self.Averages):  # repeat loop and average the results
-                data = self.rx_dev.rx()  # read a buffer of data from Pluto using pyadi-iio library (adi.py)
-                chan1 = data[
-                    0]  # Rx1 data. data is a list of values chan1 and chan2 are just 1st and 2nd element of list Do we have to discard all other values?
-                chan2 = data[1]  # Rx2 data. Changing data[0] to data. delta chan is all 0.
-                sum_chan = chan1 + chan2
-                delta_chan = chan1 - chan2
-                N = len(sum_chan)  # number of samples  len(sum_chan) = 1 as just 1st element of list is taken
-                win = np.blackman(N)
-                y_sum = sum_chan * win
-                y_delta = delta_chan * win
-
-                sp = np.absolute(np.fft.fft(y_sum))
-                sp = sp[1:-1]
-                s_sum = np.fft.fftshift(sp)
-
-                dp = np.absolute(np.fft.fft(y_delta))
-                dp = dp[1:-1]
-                s_delta = np.fft.fftshift(dp)
-
-                max_index = np.argmax(s_sum)
-                total_angle = total_angle + (np.angle(s_sum[max_index]) - np.angle(s_delta[max_index]))
-
-                s_mag_sum = np.abs(s_sum[max_index]) * 2 / np.sum(win)
-                s_mag_delta = np.abs(s_delta[max_index]) * 2 / np.sum(win)
-                s_mag_sum = np.maximum(s_mag_sum, 10 ** (-15))
-                s_mag_delta = np.maximum(s_mag_delta, 10 ** (-15))
-                s_dbfs_sum = 20 * np.log10(
-                    s_mag_sum / (2 ** 12))  # make sure the log10 argument isn't zero (hence np.max)
-                s_dbfs_delta = 20 * np.log10(
-                    s_mag_delta / (2 ** 12))  # make sure the log10 argument isn't zero (hence np.max)
-                total_sum = total_sum + (s_dbfs_sum)  # sum up all the loops, then we'll average
-                total_delta = total_delta + (s_dbfs_delta)  # sum up all the loops, then we'll average
-            PeakValue_sum = total_sum / self.Averages
-            PeakValue_delta = total_delta / self.Averages
-            PeakValue_angle = total_angle / self.Averages
-
-            if np.sign(PeakValue_angle) == -1:
-                target_error = min(-0.01, (
-                        np.sign(PeakValue_angle) * (PeakValue_sum - PeakValue_delta) + np.sign(
-                    PeakValue_angle) * (PeakValue_sum + PeakValue_delta) / 2) / (
-                                           PeakValue_sum + PeakValue_delta))
-            else:
-                target_error = max(0.01, (
-                        np.sign(PeakValue_angle) * (PeakValue_sum - PeakValue_delta) + np.sign(
-                    PeakValue_angle) * (PeakValue_sum + PeakValue_delta) / 2) / (
-                                           PeakValue_sum + PeakValue_delta))
-
-            if PeakValue_sum > max_signal:  # take the largest value, so that we know where to point the compass
-                max_signal = PeakValue_sum
-                max_angle = PeakValue_angle
-                max_PhDelta = PhDelta
-                data_fft = sum_chan
-            gain.append(PeakValue_sum)
-            delta.append(PeakValue_delta)
-            beam_phase.append(PeakValue_angle)
-            angle.append(SteerAngle)
-            diff_error.append(target_error)
-
-        NumSamples = len(data_fft)  # number of samples
-        win = np.blackman(NumSamples)
-        y = data_fft * win
-        sp = np.absolute(np.fft.fft(y))
-        sp = sp[1:-1]
-        sp = np.fft.fftshift(sp)
-        s_mag = np.abs(sp) * 2 / np.sum(win)  # Scale FFT by window and /2 since we are using half the FFT spectrum
-        s_mag = np.maximum(s_mag, 10 ** (-15))
-        max_gain = 20 * np.log10(s_mag / (2 ** 12))  # Pluto is a 12 bit ADC, so use that to convert to dBFS
-        ts = 1 / float(self.rx_dev.sample_rate)
-        xf = np.fft.fftfreq(NumSamples, ts)
-        xf = np.fft.fftshift(xf[1:-1])  # this is the x axis (freq in Hz) for our fft plot
-
-        return max(gain)
+        self.gain_cal = False
 
     # this is similar to calculate set_beam_angle
     def __set_gain_phase(self, Ph_Diff, gcal_element):
@@ -498,6 +406,7 @@ class beamformer(adar1000_array):
 
     # This method starts the Phase Cal routine
     def phase_calibration(self):
+        self.phase_cal = True
         self.load_gain('gain_cal_val.pkl')
         for cal_element in range(0, (4*len((list(self.devices.values())))-1)):
             beam_cal = [0 for i in range(0, (4 * len(list(self.devices.values()))))]
@@ -524,113 +433,16 @@ class beamformer(adar1000_array):
                 elif self.device_mode == 'tx':
                     device.latch_tx_settings()  # writes 0x01 to reg 0x28
 
-            cal_val = self.__pcal_plot(cal_element)
+            cal_val = self.__calculate_plot(cal_element=cal_element)
             self.calibrated_values.append(-1 * cal_val)
         for k in range(1, len(self.calibrated_values)):
             self.calibrated_values[k] = self.calibrated_values[k] + self.calibrated_values[k - 1]
 
         print(self.calibrated_values)
         self.__save_phase_cal()
+        self.phase_cal = False
 
-    # this is similar to calculate plot
-    def __pcal_plot(self, cal_element):
-        PhaseValues = np.arange(-196.875, 196.875,
-                                self.phase_step_size)  # These are all the phase deltas (i.e. phase difference between Rx1 and Rx2, then Rx2 and Rx3, etc.) we'll sweep.
-        PhaseStepNumber = 0  # this is the number of phase steps we'll take (140 in total).  At each phase step, we set the individual phases of each of the Rx channels
-        max_signal = -100000  # Reset max_signal.  We'll keep track of the maximum signal we get as we do this 140 loop.
-        max_angle = -90  # Reset max_angle.  This is the angle where we saw the max signal.  This is where our compass will point.
-        gain = []
-        delta = []
-        beam_phase = []
-        angle = []
-        diff_error = []
-        for PhDelta in PhaseValues:
-            self.__set_phase_phase(PhDelta, cal_element)
-            value1 = (self.c * np.radians(np.abs(PhDelta))) / (2 * 3.14159 * self.SignalFreq * self.d)
-            clamped_value1 = max(min(1, value1),
-                                 -1)  # arcsin argument must be between 1 and -1, or numpy will throw a warning
-            theta = np.degrees(np.arcsin(clamped_value1))
-            if PhDelta >= 0:
-                SteerAngle = theta  # positive PhaseDelta covers 0deg to 90 deg
-            else:
-                SteerAngle = -theta  # negative phase delta covers 0 deg to -90 deg
-
-            total_sum = 0
-            total_delta = 0
-            total_angle = 0
-            for count in range(0, self.Averages):  # repeat loop and average the results
-                data = self.rx_dev.rx()  # read a buffer of data from Pluto using pyadi-iio library (adi.py)
-                chan1 = data[
-                    0]  # Rx1 data. data is a list of values chan1 and chan2 are just 1st and 2nd element of list Do we have to discard all other values?
-                chan2 = data[1]  # Rx2 data. Changing data[0] to data. delta chan is all 0.
-                sum_chan = chan1 + chan2
-                delta_chan = chan1 - chan2
-                N = len(sum_chan)  # number of samples  len(sum_chan) = 1 as just 1st element of list is taken
-                win = np.blackman(N)
-                y_sum = sum_chan * win
-                y_delta = delta_chan * win
-
-                sp = np.absolute(np.fft.fft(y_sum))
-                sp = sp[1:-1]
-                s_sum = np.fft.fftshift(sp)
-
-                dp = np.absolute(np.fft.fft(y_delta))
-                dp = dp[1:-1]
-                s_delta = np.fft.fftshift(dp)
-
-                max_index = np.argmax(s_sum)
-                total_angle = total_angle + (np.angle(s_sum[max_index]) - np.angle(s_delta[max_index]))
-
-                s_mag_sum = np.abs(s_sum[max_index]) * 2 / np.sum(win)
-                s_mag_delta = np.abs(s_delta[max_index]) * 2 / np.sum(win)
-                s_mag_sum = np.maximum(s_mag_sum, 10 ** (-15))
-                s_mag_delta = np.maximum(s_mag_delta, 10 ** (-15))
-                s_dbfs_sum = 20 * np.log10(
-                    s_mag_sum / (2 ** 12))  # make sure the log10 argument isn't zero (hence np.max)
-                s_dbfs_delta = 20 * np.log10(
-                    s_mag_delta / (2 ** 12))  # make sure the log10 argument isn't zero (hence np.max)
-                total_sum = total_sum + (s_dbfs_sum)  # sum up all the loops, then we'll average
-                total_delta = total_delta + (s_dbfs_delta)  # sum up all the loops, then we'll average
-            PeakValue_sum = total_sum / self.Averages
-            PeakValue_delta = total_delta / self.Averages
-            PeakValue_angle = total_angle / self.Averages
-
-            if np.sign(PeakValue_angle) == -1:
-                target_error = min(-0.01, (
-                        np.sign(PeakValue_angle) * (PeakValue_sum - PeakValue_delta) + np.sign(
-                    PeakValue_angle) * (PeakValue_sum + PeakValue_delta) / 2) / (
-                                           PeakValue_sum + PeakValue_delta))
-            else:
-                target_error = max(0.01, (
-                        np.sign(PeakValue_angle) * (PeakValue_sum - PeakValue_delta) + np.sign(
-                    PeakValue_angle) * (PeakValue_sum + PeakValue_delta) / 2) / (
-                                           PeakValue_sum + PeakValue_delta))
-
-            if PeakValue_sum > max_signal:  # take the largest value, so that we know where to point the compass
-                max_signal = PeakValue_sum
-                max_angle = PeakValue_angle
-                max_PhDelta = PhDelta
-                data_fft = sum_chan
-            gain.append(PeakValue_sum)
-            delta.append(PeakValue_delta)
-            beam_phase.append(PeakValue_angle)
-            angle.append(SteerAngle)
-            diff_error.append(target_error)
-
-        NumSamples = len(data_fft)  # number of samples
-        win = np.blackman(NumSamples)
-        y = data_fft * win
-        sp = np.absolute(np.fft.fft(y))
-        sp = sp[1:-1]
-        sp = np.fft.fftshift(sp)
-        s_mag = np.abs(sp) * 2 / np.sum(win)  # Scale FFT by window and /2 since we are using half the FFT spectrum
-        s_mag = np.maximum(s_mag, 10 ** (-15))
-        max_gain = 20 * np.log10(s_mag / (2 ** 12))  # Pluto is a 12 bit ADC, so use that to convert to dBFS
-        ts = 1 / float(self.rx_dev.sample_rate)
-        xf = np.fft.fftfreq(NumSamples, ts)
-        xf = np.fft.fftshift(xf[1:-1])  # this is the x axis (freq in Hz) for our fft plot
-
-        return angle[gain.index(min(gain))]
+        # this is similar to calculate plot
 
     # this is similar to calculate set_beam_angle
     def __set_phase_phase(self, Ph_Diff, cal_element):
@@ -663,6 +475,13 @@ class beamformer(adar1000_array):
             pickle.dump(self.calibrated_values, file)
             file.close()
 
+    # Gain plots sum_chan. Delta plots the difference and Error plots the diff of sum & delta chans
+    def plot(self):
+        gain, angle = self.__calculate_plot()
+        plt.clf()
+        # plt.plot(xf/1e6, max_gain)
+        plt.scatter(gain, angle)
+        plt.show()
 
 class pll:
     def __init__(self):
