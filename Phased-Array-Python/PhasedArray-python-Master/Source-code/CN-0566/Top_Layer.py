@@ -1,5 +1,7 @@
 from cn0566 import *
-from project_config import *
+
+rpi_ip = "ip:10.84.10.66"  # IP address of the Raspberry Pi
+lo_ip = "ip:192.168.2.1"  # IP address of the Transreceiver Block
 
 my_pll = pll.adf4159(uri=rpi_ip)
 my_sdr = sdr(uri=lo_ip)
@@ -21,7 +23,7 @@ my_antenna_array.rx_dev = my_sdr
 # my_antenna_array.set_chan_gain(3, 120)
 # my_antenna_array.load_gain('gain_cal_val.pkl')
 # my_antenna_array.set_all_gain()
-# my_antenna_array.calculate_plot()
+my_antenna_array.plot()
 # my_antenna_array.set_beam_angle(45)
-my_antenna_array.gain_calibration()
-my_antenna_array.phase_calibration()
+# my_antenna_array.gain_calibration()
+# my_antenna_array.phase_calibration()
