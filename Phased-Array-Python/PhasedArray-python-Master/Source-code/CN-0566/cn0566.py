@@ -61,11 +61,10 @@ class beamformer(adar1000_array):
                                 element_map,
                                 device_element_map)
 
-        """Initialize all the class variables for the project. For now Rx{}_Phase_cal values are fixed 
-        i.e. only 8 channels with 8 values, later upgrade it to list whose len vaies according to number of channels """
+        """Initialize all the class variables for the project. Fixed variable allocation changed to dynamic """
         self.device_mode = None
-        self.cal_gain1, self.cal_gain0 = None, None
-        self.Rx1_Phase_Cal, self.Rx2_Phase_Cal, self.Rx3_Phase_Cal, self.Rx4_Phase_Cal, self.Rx5_Phase_Cal, self.Rx6_Phase_Cal, self.Rx7_Phase_Cal, self.Rx8_Phase_Cal = 0, 0, 0, 0, 0, 0, 0, 0
+        # self.Rx1_Phase_Cal, self.Rx2_Phase_Cal, self.Rx3_Phase_Cal, self.Rx4_Phase_Cal, self.Rx5_Phase_Cal,
+        # self.Rx6_Phase_Cal, self.Rx7_Phase_Cal, self.Rx8_Phase_Cal = 0, 0, 0, 0, 0, 0, 0, 0
         self.SignalFreq = 10492000000  # Frequency of source
         self.Averages = 1  # Number of Avg too be taken. We be user input value on GUI
         self.phase_step_size = 2.8125  # it is 360/2**number of bits. For now number of bits == 6. change later
@@ -75,7 +74,7 @@ class beamformer(adar1000_array):
         self.res_bits = 1  # res_bits and bits are two different vaiable. It can be variable but it is hardset to 1 for now
         self.calibrated_values = []
         self.gcalibrated_values = []
-        self.gcal = []
+        self.gcal = []  # [0x7F for i in range(0, 4*len(list(self.devices.values())))]
         self.rx_dev = None
 
     # This method configure the device beamformer props like RAM bypass, Transreciever source etc., based on device mode
@@ -152,34 +151,42 @@ class beamformer(adar1000_array):
         # I used pickle file to serialize the data. Maybe could switch to more standard format like JSON or csv
         try:
             with open(filename, 'rb') as file1:
-                self.cal_gain0, self.cal_gain1 = pickle.load(file1)
+                self.gcal = pickle.load(file1)
         except:
-            self.cal_gain0, self.cal_gain1 = [0x7F, 0x7F, 0x7F, 0x7F], [0x7F, 0x7F, 0x7F, 0x7F]
+            for i in range(0, (4 * len(list(self.devices.values())))):
+                self.gcal.append(0x7F)
 
     # This will try to set all the gain to it's calibrated values. If system is not calibrated set all chans to max gain
     def set_all_gain(self):
+        self.load_gain()
         j = 0
         for device in self.devices.values():
+            channel_gain_value = []
+            for ind in range(0, 4):
+                channel_gain_value.append(self.gcal[((j * 4) + ind)])
+            j += 1
             i = 0  # Gain of Individual channel
             for channel in device.channels:
-                if j == 0:
-                    if self.device_mode == 'rx':
-                        channel.rx_gain = self.cal_gain0[i]
-                    elif self.device_mode == 'tx':
-                        channel.tx_gain = self.cal_gain0[i]
-                    else:
-                        raise ValueError("Configure the device first")
-                elif j == 1:
-                    if self.device_mode == 'rx':
-                        channel.rx_gain = self.cal_gain1[i]
-                    elif self.device_mode == 'tx':
-                        channel.tx_gain = self.cal_gain1[i]
+                if self.device_mode == 'rx':
+                    channel.rx_gain = channel_gain_value[i]
+                elif self.device_mode == 'tx':
+                    channel.tx_gain = channel_gain_value[i]
+                else:
+                    raise ValueError("Configure the device first")
                 i += 1
             if self.device_mode == 'rx':
                 device.latch_rx_settings()  # writes 0x01 to reg 0x28
             elif self.device_mode == 'tx':
                 device.latch_tx_settings()  # writes 0x01 to reg 0x28
-            j += 1
+
+    # This method load phase calibrated value from filepath specified, if not cali set all channel phase correction to 0
+    def load_phase(self, filename=''):
+        try:
+            with open(filename, 'rb') as file:
+                self.calibrated_values = pickle.load(file)
+        except:
+            for i in range(0, (4 * len(list(self.devices.values())))):
+                self.calibrated_values.append(0)
 
     # This allows to set individual gain of the channel
     def set_chan_gain(self, chan_no, gain_val):  # chan_no is the ch whose gain you want to set, gain_val is value
@@ -192,31 +199,23 @@ class beamformer(adar1000_array):
 
     """ A public method to sweep the phase value from -180 to 180 deg, calculate phase values of all the channel
       and set them. If we want beam angle at fixed angle you can pass angle value at which you want center lobe"""
+
     def set_beam_angle(self, Ph_Diff):
         adar_list = list(self.devices.values())
-        k = 0
+        j = 0
         for adar in adar_list:
-            if k == 0:
-                Phase_A = ((np.rint(
-                    Ph_Diff * 0 / self.phase_step_size) * self.phase_step_size) + self.Rx1_Phase_Cal) % 360  # round each value to the nearest step size increment
-                Phase_B = ((np.rint(
-                    Ph_Diff * 1 / self.phase_step_size) * self.phase_step_size) + self.Rx2_Phase_Cal) % 360  # Cal values defined in project_config file.
-                Phase_C = ((np.rint(Ph_Diff * 2 / self.phase_step_size) * self.phase_step_size) + self.Rx3_Phase_Cal) % 360
-                Phase_D = ((np.rint(Ph_Diff * 3 / self.phase_step_size) * self.phase_step_size) + self.Rx4_Phase_Cal) % 360
-
-            elif k == 1:
-                Phase_A = ((np.rint(Ph_Diff * 4 / self.phase_step_size) * self.phase_step_size) + self.Rx5_Phase_Cal) % 360
-                Phase_B = ((np.rint(Ph_Diff * 5 / self.phase_step_size) * self.phase_step_size) + self.Rx6_Phase_Cal) % 360
-                Phase_C = ((np.rint(Ph_Diff * 6 / self.phase_step_size) * self.phase_step_size) + self.Rx7_Phase_Cal) % 360
-                Phase_D = ((np.rint(Ph_Diff * 7 / self.phase_step_size) * self.phase_step_size) + self.Rx8_Phase_Cal) % 360
-            k += 1
-            channel_phase_value = [Phase_A, Phase_B, Phase_C, Phase_D]
+            channel_phase_value = []
+            for ind in range(0, 4):
+                channel_phase_value.append(((np.rint(Ph_Diff * ((j * 4) + ind) / self.phase_step_size) *
+                                             self.phase_step_size) + self.calibrated_values[((j * 4) + ind)]) % 360)
             # print(channel_phase_value)
+            j += 1
             i = 0
             for channel in adar.channels:
                 # Set phase depending on the device mode
                 if self.device_mode == "rx":
-                    channel.rx_phase = channel_phase_value[i]  # writes to I and Q registers values according to Table 13-16 from datasheet.
+                    channel.rx_phase = channel_phase_value[
+                        i]  # writes to I and Q registers values according to Table 13-16 from datasheet.
                 i = i + 1
             if self.device_mode == "rx":
                 adar.latch_rx_settings()
@@ -228,6 +227,7 @@ class beamformer(adar1000_array):
         two methods calls different method to set the phase of channel according to calibration routine. 
         Thus this 3 methods have lot of redundant code find out a way to eliminate this redundant code"""
     def calculate_plot(self):
+        # self.load_phase('phase_cal_val.pkl')
         PhaseValues = np.arange(-196.875, 196.875,
                                 self.phase_step_size)  # These are all the phase deltas (i.e. phase difference between Rx1 and Rx2, then Rx2 and Rx3, etc.) we'll sweep.
         PhaseStepNumber = 0  # this is the number of phase steps we'll take (140 in total).  At each phase step, we set the individual phases of each of the Rx channels
@@ -330,84 +330,40 @@ class beamformer(adar1000_array):
         plt.scatter(ArrayAngle,
                     ArrayGain)  # Gain plots sum_chan. Delta plots the difference and Error plots the diff of sum & delta chans
         plt.show()
-        return angle[gain.index(max(gain))] # This givens angle frequency source
-
-    # This method load phase calibrated value from filepath specified, if not cali set all channel phase correction to 0
-    def load_phase(self, filename=''):
-        try:
-            with open(filename, 'rb') as file:
-                self.Rx1_Phase_Cal, self.Rx2_Phase_Cal, self.Rx3_Phase_Cal, self.Rx4_Phase_Cal, self.Rx5_Phase_Cal, self.Rx6_Phase_Cal, self.Rx7_Phase_Cal, self.Rx8_Phase_Cal = pickle.load(
-                    file)
-        except:
-            self.Rx1_Phase_Cal, self.Rx2_Phase_Cal, self.Rx3_Phase_Cal, self.Rx4_Phase_Cal, self.Rx5_Phase_Cal, self.Rx6_Phase_Cal, self.Rx7_Phase_Cal, self.Rx8_Phase_Cal = 0, 0, 0, 0, 0, 0, 0, 0
+        return angle[gain.index(max(gain))]  # This givens angle frequency source
 
     # This method starts the Gain Cal routine
     def gain_calibration(self):
-        for gcal_element in range(1, 9):
-            if gcal_element == 1:
-                beam0_cal = [0x7F, 0, 0, 0]
-                beam1_cal = [0, 0, 0, 0]
-
-            elif gcal_element == 2:
-                beam0_cal = [0, 0x7F, 0, 0]
-                beam1_cal = [0, 0, 0, 0]
-
-            elif gcal_element == 3:
-                beam0_cal = [0, 0, 0x7F, 0]
-                beam1_cal = [0, 0, 0, 0]
-
-            elif gcal_element == 4:
-                beam0_cal = [0, 0, 0, 0x7F]
-                beam1_cal = [0, 0, 0, 0]
-
-            elif gcal_element == 5:
-                beam0_cal = [0, 0, 0, 0]
-                beam1_cal = [0x7F, 0, 0, 0]
-
-            elif gcal_element == 6:
-                beam0_cal = [0, 0, 0, 0]
-                beam1_cal = [0, 0x7F, 0, 0]
-
-            elif gcal_element == 7:
-                beam0_cal = [0, 0, 0, 0]
-                beam1_cal = [0, 0, 0x7F, 0]
-
-            elif gcal_element == 8:
-                beam0_cal = [0, 0, 0, 0]
-                beam1_cal = [0, 0, 0, 0x7F]
-
+        for gcal_element in range(0, (4 * len(list(self.devices.values())))):
+            beam_cal = [0 for i in range(0, (4 * len(list(self.devices.values()))))]
+            beam_cal[gcal_element] = 0x7F
+            # print(beam_cal, gcal_element)
             j = 0
             for device in self.devices.values():
+                channel_gain_value = []
+                for ind in range(0, 4):
+                    channel_gain_value.append(beam_cal[((j * 4) + ind)])
+                j += 1
                 i = 0  # Gain of Individual channel
                 for channel in device.channels:
-                    if j == 0:
-                        if self.device_mode == 'rx':
-                            channel.rx_gain = beam0_cal[i]
-                        elif self.device_mode == 'tx':
-                            channel.tx_gain = beam0_cal[i]
-                        else:
-                            raise ValueError("Configure the device first")
-                    elif j == 1:
-                        if self.device_mode == 'rx':
-                            channel.rx_gain = beam1_cal[i]
-                        elif self.device_mode == 'tx':
-                            channel.tx_gain = beam1_cal[i]
+                    if self.device_mode == 'rx':
+                        channel.rx_gain = channel_gain_value[i]
+                    elif self.device_mode == 'tx':
+                        channel.tx_gain = channel_gain_value[i]
+                    else:
+                        raise ValueError("Configure the device first")
                     i += 1
                 if self.device_mode == 'rx':
                     device.latch_rx_settings()  # writes 0x01 to reg 0x28
                 elif self.device_mode == 'tx':
                     device.latch_tx_settings()  # writes 0x01 to reg 0x28
-                j += 1
             gcal_val = self.__gcal_plot(gcal_element)
             self.gcalibrated_values.append(gcal_val)
 
         for k in range(0, 8):
             x = ((self.gcalibrated_values[k] * 127) / (min(self.gcalibrated_values)))
             self.gcal.append(int(x))
-        #     print(gcal)
-        self.cal_gain0 = self.gcal[:4]
-        self.cal_gain1 = self.gcal[4:]
-        print(self.cal_gain0, self.cal_gain1)
+        print(self.gcal)
         self.__save_gain_cal()
 
     # this is similar to calculate plot
@@ -512,120 +468,66 @@ class beamformer(adar1000_array):
 
     # this is similar to calculate set_beam_angle
     def __set_gain_phase(self, Ph_Diff, gcal_element):
-        adar_list = list(self.devices.values())
-        Phase_1 = (np.rint(Ph_Diff * 1 / self.phase_step_size) * self.phase_step_size) % 360
-
-        if gcal_element == 1:
-            beam0_ph = [Phase_1, 0, 0, 0]
-            beam1_ph = [0, 0, 0, 0]
-
-        elif gcal_element == 2:
-            beam0_ph = [0, Phase_1, 0, 0]
-            beam1_ph = [0, 0, 0, 0]
-
-        elif gcal_element == 3:
-            beam0_ph = [0, 0, Phase_1, 0]
-            beam1_ph = [0, 0, 0, 0]
-
-        elif gcal_element == 4:
-            beam0_ph = [0, 0, 0, Phase_1]
-            beam1_ph = [0, 0, 0, 0]
-
-        elif gcal_element == 5:
-            beam0_ph = [0, 0, 0, 0]
-            beam1_ph = [Phase_1, 0, 0, 0]
-
-        elif gcal_element == 6:
-            beam0_ph = [0, 0, 0, 0]
-            beam1_ph = [0, Phase_1, 0, 0]
-
-        elif gcal_element == 7:
-            beam0_ph = [0, 0, 0, 0]
-            beam1_ph = [0, 0, Phase_1, 0]
-
-        elif gcal_element == 8:
-            beam0_ph = [0, 0, 0, 0]
-            beam1_ph = [0, 0, 0, Phase_1]
-
-        for adar in adar_list:
+        beam_ph = [0 for i in range(0, (4 * len(list(self.devices.values()))))]
+        beam_ph[gcal_element] = (np.rint(Ph_Diff * 1 / self.phase_step_size) * self.phase_step_size) % 360
+        j = 0
+        for device in self.devices.values():
+            channel_phase_value = []
+            for ind in range(0, 4):
+                channel_phase_value.append(beam_ph[((j * 4) + ind)])
+            j += 1
             i = 0  # Gain of Individual channel
-            for channel in adar.channels:
-                if adar == adar_list[0]:
-                    channel.rx_phase = beam0_ph[i]
-                elif adar == adar_list[1]:
-                    channel.rx_phase = beam1_ph[i]
+            for channel in device.channels:
+                if self.device_mode == 'rx':
+                    channel.rx_gain = channel_phase_value[i]
+                elif self.device_mode == 'tx':
+                    channel.tx_gain = channel_phase_value[i]
+                else:
+                    raise ValueError("Configure the device first")
                 i += 1
-            adar.latch_rx_settings()
+            if self.device_mode == 'rx':
+                device.latch_rx_settings()  # writes 0x01 to reg 0x28
+            elif self.device_mode == 'tx':
+                device.latch_tx_settings()  # writes 0x01 to reg 0x28
 
     # Saves the Gain calibration values
     def __save_gain_cal(self):
         with open('gain_cal_val.pkl', 'wb') as file1:
-            pickle.dump([self.cal_gain0, self.cal_gain1], file1)
+            pickle.dump(self.gcal, file1)
             file1.close()
 
     # This method starts the Phase Cal routine
     def phase_calibration(self):
         self.load_gain('gain_cal_val.pkl')
-        for cal_element in range(1, 8):
-            if cal_element == 1:
-                beam0_cal = [self.cal_gain0[0], self.cal_gain0[1], 0, 0]
-                beam1_cal = [0, 0, 0, 0]
-
-            elif cal_element == 2:
-                beam0_cal = [0, self.cal_gain0[1], self.cal_gain0[2], 0]
-                beam1_cal = [0, 0, 0, 0]
-
-            elif cal_element == 3:
-                beam0_cal = [0, 0, self.cal_gain0[2], self.cal_gain0[3]]
-                beam1_cal = [0, 0, 0, 0]
-
-            elif cal_element == 4:
-                beam0_cal = [0, 0, 0, self.cal_gain0[3]]
-                beam1_cal = [self.cal_gain1[0], 0, 0, 0]
-
-            elif cal_element == 5:
-                beam0_cal = [0, 0, 0, 0]
-                beam1_cal = [self.cal_gain1[0], self.cal_gain1[1], 0, 0]
-
-            elif cal_element == 6:
-                beam0_cal = [0, 0, 0, 0]
-                beam1_cal = [0, self.cal_gain1[1], self.cal_gain1[2], 0]
-
-            elif cal_element == 7:
-                beam0_cal = [0, 0, 0, 0]
-                beam1_cal = [0, 0, self.cal_gain1[2], self.cal_gain1[3]]
-
+        for cal_element in range(0, (4*len((list(self.devices.values())))-1)):
+            beam_cal = [0 for i in range(0, (4 * len(list(self.devices.values()))))]
+            beam_cal[cal_element] = self.gcal[cal_element]
+            beam_cal[(cal_element+1)] = self.gcal[(cal_element+1)]
+            # print(beam_cal, cal_element)
             j = 0
             for device in self.devices.values():
+                channel_gain_value = []
+                for ind in range(0, 4):
+                    channel_gain_value.append(beam_cal[((j * 4) + ind)])
+                j += 1
                 i = 0  # Gain of Individual channel
                 for channel in device.channels:
-                    if j == 0:
-                        if self.device_mode == 'rx':
-                            channel.rx_gain = beam0_cal[i]
-                        elif self.device_mode == 'tx':
-                            channel.tx_gain = beam0_cal[i]
-                        else:
-                            raise ValueError("Configure the device first")
-                    elif j == 1:
-                        if self.device_mode == 'rx':
-                            channel.rx_gain = beam1_cal[i]
-                        elif self.device_mode == 'tx':
-                            channel.tx_gain = beam1_cal[i]
+                    if self.device_mode == 'rx':
+                        channel.rx_gain = channel_gain_value[i]
+                    elif self.device_mode == 'tx':
+                        channel.tx_gain = channel_gain_value[i]
+                    else:
+                        raise ValueError("Configure the device first")
                     i += 1
                 if self.device_mode == 'rx':
                     device.latch_rx_settings()  # writes 0x01 to reg 0x28
                 elif self.device_mode == 'tx':
                     device.latch_tx_settings()  # writes 0x01 to reg 0x28
-                j += 1
 
             cal_val = self.__pcal_plot(cal_element)
             self.calibrated_values.append(-1 * cal_val)
-        self.calibrated_values[1] = self.calibrated_values[1] + self.calibrated_values[0]
-        self.calibrated_values[2] = self.calibrated_values[2] + self.calibrated_values[1]
-        self.calibrated_values[3] = self.calibrated_values[3] + self.calibrated_values[2]
-        self.calibrated_values[4] = self.calibrated_values[4] + self.calibrated_values[3]
-        self.calibrated_values[5] = self.calibrated_values[5] + self.calibrated_values[4]
-        self.calibrated_values[6] = self.calibrated_values[6] + self.calibrated_values[5]
+        for k in range(1, len(self.calibrated_values)):
+            self.calibrated_values[k] = self.calibrated_values[k] + self.calibrated_values[k - 1]
 
         print(self.calibrated_values)
         self.__save_phase_cal()
@@ -732,63 +634,33 @@ class beamformer(adar1000_array):
 
     # this is similar to calculate set_beam_angle
     def __set_phase_phase(self, Ph_Diff, cal_element):
-        adar_list = list(self.devices.values())
-        Phase_1 = (np.rint(Ph_Diff * 1 / self.phase_step_size) * self.phase_step_size) % 360
-        Phase_2 = Phase_1 - 180
-
-        if cal_element == 1:
-            beam0_ph = [Phase_2, Phase_1, 0, 0]
-            beam1_ph = [0, 0, 0, 0]
-
-        elif cal_element == 2:
-            beam0_ph = [0, Phase_2, Phase_1, 0]
-            beam1_ph = [0, 0, 0, 0]
-
-        elif cal_element == 3:
-            beam0_ph = [0, 0, Phase_2, Phase_1]
-            beam1_ph = [0, 0, 0, 0]
-
-        elif cal_element == 4:
-            beam0_ph = [0, 0, 0, Phase_2]
-            beam1_ph = [Phase_1, 0, 0, 0]
-
-        elif cal_element == 5:
-            beam0_ph = [0, 0, 0, 0]
-            beam1_ph = [Phase_2, Phase_1, 0, 0]
-
-        elif cal_element == 6:
-            beam0_ph = [0, 0, 0, 0]
-            beam1_ph = [0, Phase_1, Phase_2, 0]
-
-        elif cal_element == 7:
-            beam0_ph = [0, 0, 0, 0]
-            beam1_ph = [0, 0, Phase_1, Phase_2]
-
-        for adar in adar_list:
+        beam_ph = [0 for i in range(0, (4 * len(list(self.devices.values()))))]
+        beam_ph[cal_element] = (np.rint(Ph_Diff * 1 / self.phase_step_size) * self.phase_step_size) % 360
+        beam_ph[(cal_element + 1)] = ((np.rint(Ph_Diff * 1 / self.phase_step_size) * self.phase_step_size) % 360) - 180
+        j = 0
+        for device in self.devices.values():
+            channel_phase_value = []
+            for ind in range(0, 4):
+                channel_phase_value.append(beam_ph[((j * 4) + ind)])
+            j += 1
             i = 0  # Gain of Individual channel
-            for channel in adar.channels:
-                if adar == adar_list[0]:
-                    channel.rx_phase = beam0_ph[i]
-                elif adar == adar_list[1]:
-                    channel.rx_phase = beam1_ph[i]
+            for channel in device.channels:
+                if self.device_mode == 'rx':
+                    channel.rx_gain = channel_phase_value[i]
+                elif self.device_mode == 'tx':
+                    channel.tx_gain = channel_phase_value[i]
+                else:
+                    raise ValueError("Configure the device first")
                 i += 1
-            adar.latch_rx_settings()
+            if self.device_mode == 'rx':
+                device.latch_rx_settings()  # writes 0x01 to reg 0x28
+            elif self.device_mode == 'tx':
+                device.latch_tx_settings()  # writes 0x01 to reg 0x28
 
     # Saves the Phase calibration values
     def __save_phase_cal(self):
-        self.Rx1_Phase_Cal = 0
-        self.Rx2_Phase_Cal = self.calibrated_values[0]
-        self.Rx3_Phase_Cal = self.calibrated_values[1]
-        self.Rx4_Phase_Cal = self.calibrated_values[2]
-        self.Rx5_Phase_Cal = self.calibrated_values[3]
-        self.Rx6_Phase_Cal = self.calibrated_values[4]
-        self.Rx7_Phase_Cal = self.calibrated_values[5]
-        self.Rx8_Phase_Cal = self.calibrated_values[6]
         with open('phase_cal_val.pkl', 'wb') as file:
-            pickle.dump(
-                [self.Rx1_Phase_Cal, self.Rx2_Phase_Cal, self.Rx3_Phase_Cal, self.Rx4_Phase_Cal, self.Rx5_Phase_Cal, self.Rx6_Phase_Cal,
-                 self.Rx7_Phase_Cal,
-                 self.Rx8_Phase_Cal], file)
+            pickle.dump(self.calibrated_values, file)
             file.close()
 
 
