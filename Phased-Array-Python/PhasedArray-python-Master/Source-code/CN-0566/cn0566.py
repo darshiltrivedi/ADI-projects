@@ -36,6 +36,7 @@ from adi.adf4159 import adf4159
 from adi.ad936x import ad9361, Pluto
 import numpy as np
 import pickle
+import matplotlib.pyplot as plt
 
 ''' 
     Phased Array beamformwer has 3 main devices 1. beamformer 2. Rx_device - SDR 3. Tx_device - pll
@@ -201,7 +202,6 @@ class beamformer(adar1000_array):
 
     """ A public method to sweep the phase value from -180 to 180 deg, calculate phase values of all the channel
       and set them. If we want beam angle at fixed angle you can pass angle value at which you want center lobe"""
-
     def set_beam_angle(self, Ph_Diff):
         self.load_phase('phase_cal_val.pkl')
         adar_list = list(self.devices.values())
@@ -437,7 +437,7 @@ class beamformer(adar1000_array):
             self.calibrated_values.append(-1 * cal_val)
         for k in range(1, len(self.calibrated_values)):
             self.calibrated_values[k] = self.calibrated_values[k] + self.calibrated_values[k - 1]
-
+        self.calibrated_values.insert(0, 0)
         print(self.calibrated_values)
         self.__save_phase_cal()
         self.phase_cal = False
@@ -482,6 +482,7 @@ class beamformer(adar1000_array):
         # plt.plot(xf/1e6, max_gain)
         plt.scatter(gain, angle)
         plt.show()
+
 
 class pll:
     def __init__(self):
