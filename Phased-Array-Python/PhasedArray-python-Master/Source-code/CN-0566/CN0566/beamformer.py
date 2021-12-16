@@ -374,9 +374,9 @@ class beamformer(adar1000_array):
             i = 0  # Gain of Individual channel
             for channel in device.channels:
                 if self.device_mode == 'rx':
-                    channel.rx_gain = channel_phase_value[i]
+                    channel.rx_phase = channel_phase_value[i]
                 elif self.device_mode == 'tx':
-                    channel.tx_gain = channel_phase_value[i]
+                    channel.tx_phase = channel_phase_value[i]
                 else:
                     raise ValueError("Configure the device first")
                 i += 1
@@ -448,9 +448,9 @@ class beamformer(adar1000_array):
             i = 0  # Gain of Individual channel
             for channel in device.channels:
                 if self.device_mode == 'rx':
-                    channel.rx_gain = channel_phase_value[i]
+                    channel.rx_phase = channel_phase_value[i]
                 elif self.device_mode == 'tx':
-                    channel.tx_gain = channel_phase_value[i]
+                    channel.tx_phase = channel_phase_value[i]
                 else:
                     raise ValueError("Configure the device first")
                 i += 1
@@ -468,9 +468,7 @@ class beamformer(adar1000_array):
     # Gain plots sum_chan. Delta plots the difference and Error plots the diff of sum & delta chans
     def plot(self, plot_type: str):
         gain, angle, delta, diff_error, beam_phase, xf, max_gain = self.__calculate_plot()
-        plt.clf()
         if plot_type == "fft":
-            plt.plot(xf / 1e6, max_gain)
+           return xf / 1e6, max_gain
         elif plot_type == "monopulse":
-            plt.scatter(gain, angle)
-        plt.show()
+            return gain, angle
