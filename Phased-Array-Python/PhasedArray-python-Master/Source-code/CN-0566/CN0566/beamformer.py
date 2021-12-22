@@ -34,6 +34,7 @@
 from adi.adar1000 import adar1000_array
 import numpy as np
 import pickle
+from statistics import mean
 import matplotlib.pyplot as plt
 
 ''' 
@@ -42,15 +43,15 @@ import matplotlib.pyplot as plt
 
 
 class beamformer(adar1000_array):
+    """ Beamformer class inherits from adar1000_array and adds batch operations for phaser project
+        like configure, calibrate set_beam_phase_diff etc
+        """
     def __init__(self,
                  uri=None,
                  chip_ids=None,
                  device_map=None,
                  element_map=None,
                  device_element_map=None):
-
-        """ Beamformer class inherits from adar1000_array and adds batch operations for phaser project
-         like configure, calibrate set_beam_angle etc"""
 
         adar1000_array.__init__(self,
                                 uri,
@@ -59,7 +60,7 @@ class beamformer(adar1000_array):
                                 element_map,
                                 device_element_map)
 
-        """Initialize all the class variables for the project. Fixed variable allocation changed to dynamic """
+        """ Initialize all the class variables for the project. Fixed variable allocation changed to dynamic """
         self.device_mode = None
         self.SignalFreq = 10492000000  # Frequency of source
         self.Averages = 1  # Number of Avg to be taken. We be user input value on GUI
@@ -74,8 +75,14 @@ class beamformer(adar1000_array):
         self.gain_cal = False  # gain/phase calibration status flag it goes True when performing calibration
         self.phase_cal = False
 
-    # This method configure the device beamformer props like RAM bypass, Transreciever source etc., based on device mode
-    def configure(self, device_mode=""):
+    def configure(self, device_mode="rx"):
+        """ Configure the device/beamformer properties like RAM bypass, Tr source etc.
+            parameters:
+                device_mode: type=string
+                             By Default mode of operation is recieve mode i.e. rx.
+                             It can be configured in rx, tx and disabled mode.
+        """
+
         self.device_mode = device_mode
         for device in self.devices.values():  # For device in Dict of device array
             # Configure ADAR1000
@@ -125,6 +132,7 @@ class beamformer(adar1000_array):
                 # Enable the Rx path for each channel
                 for channel in device.channels:
                     channel.rx_enable = True  # this writes reg0x2E with data 0x00, then reg0x2E with data 0x20.
+                    channel.rx_gain = 127
                     #  So it overwrites 0x2E, and enables only one channel
 
             # Configure the device for Tx mode
@@ -134,6 +142,7 @@ class beamformer(adar1000_array):
                 # Enable the Tx path for each channel and set the external PA bias
                 for channel in device.channels:
                     channel.tx_enable = True
+                    channel.tx_gain = 127
                     channel.pa_bias_on = -2
 
             else:
@@ -144,12 +153,20 @@ class beamformer(adar1000_array):
             elif self.device_mode == "tx":
                 device.latch_tx_settings()  # writes 0x02 to reg 0x28.
 
-    # This method load gain calibrated value from filepath specified, if not calibrated set all channel gain to max
     def load_gain_cal(self, filename='', calibration=False):
+        """ Load gain calibrated value, if not calibrated set all channel gain to maximum.
+            parameters:
+                filename: type=string
+                          Provide path of gain calibration file
+                calibration: type=boolean
+                          calibration is a Flag which is set when loading gain calibration value for phase calibration
+                          It is optional and not at all required by user to provide at any time.
+        """
+
         """I used pickle file to serialize the data. Maybe could switch to more standard format like JSON or csv
             calibration is a flag so when phase calibration is loading gain values it is set and does not return
             default values if it fails and throws error"""
-        if not calibration:
+        if not calibration:  # if load values is not called from phase calibration
             try:
                 with open(filename, 'rb') as file1:
                     self.gcal = pickle.load(file1)  # Load gain cal values
@@ -166,8 +183,13 @@ class beamformer(adar1000_array):
                 calibration = False
                 raise SystemError("Perform Gain calibration first")  # if it fails raise error
 
-    # This method load phase calibrated value from filepath specified, if not cali set all channel phase correction to 0
     def load_phase_cal(self, filename=''):
+        """ Load phase calibrated value, if not calibrated set all channel phase correction to 0.
+            parameters:
+                filename: type=string
+                          Provide path of phase calibration file
+        """
+
         try:
             with open(filename, 'rb') as file:
                 self.pcal = pickle.load(file)  # Load gain cal values
@@ -175,13 +197,24 @@ class beamformer(adar1000_array):
             for i in range(0, (4 * len(list(self.devices.values())))):
                 self.pcal.append(0)  # if it fails load default value i.e. 0
 
-    # This will try to set all the gain to it's calibrated values. If system is not calibrated set all chans to max gain
-    def set_all_gain(self):
+    def set_all_gain(self, value=127):
+        """ This will try to set gain of all the channels
+            parameters:
+                    value: type=int
+                              Value is the value of gain that you want to set for all the channel
+                              It is optional and it's default value is 127.
+        """
+
+        """ Create an empty list. Based on the device number and channel of that device append gain value to that empty 
+            list this creates a list of 4 items. Now write channel of each device, gain values according to created list 
+            values. Note:- Here as all the gains are set to same values we can directly write same value to all the device and
+            do not need to create a list for each ind device but just to maintain structural pattern of code. """
+
         j = 0  # j is index of device and device indicate the adar1000 on which operation is currently done
         for device in self.devices.values():  # device in dict of all adar1000 connected
             channel_gain_value = []  # channel gain value to be written on ind channel
             for ind in range(0, 4):  # ind is index of current channel of current device
-                channel_gain_value.append(self.gcal[((j * 4) + ind)])
+                channel_gain_value.append(value)  #  self.gcal[((j * 4) + ind)]
             j += 1
             i = 0  # i is index of channel of each device
             for channel in device.channels:
@@ -197,10 +230,19 @@ class beamformer(adar1000_array):
             elif self.device_mode == 'tx':
                 device.latch_tx_settings()  # writes 0x01 to reg 0x28
 
-    # This allows to set individual gain of the channel
-    def set_chan_gain(self, chan_no, gain_val):  # chan_no is the ch whose gain you want to set, gain_val is value
-        """Each device has 4 channels but for top level channel numbers are 1 to 8 so took dev as Quotient of
-           channel num div by 4 and channel of that dev is overall chan num minus 4 x that dev number"""
+    def set_chan_gain(self, chan_no: int, gain_val):
+        """ Setl gain of the individua channel/s.
+            parameters:
+                    chan_no: type=int
+                              It is the index of channel whose gain you want to set
+                    gain_val: type=int or hex
+                              gain_val is the value of gain that you want to set
+        """
+
+        """Each device has 4 channels but for top level channel numbers are 1 to 8 so took device number as Quotient of
+           channel num div by 4 and channel of that dev is overall chan num minus 4 x that dev number. For e.g:
+           if you want to set gain of channel at index 5 it is 6th channel or 2nd channel of 2nd device so 5//4 = 1
+           i.e. index of 2nd device and (5 - 4*(5//4) = 1 i.e. index of channel"""
         if self.device_mode == 'rx':
             list(self.devices.values())[chan_no // 4].channels[(chan_no - (4 * (chan_no // 4)))].rx_gain = gain_val
         elif self.device_mode == 'tx':
@@ -208,14 +250,25 @@ class beamformer(adar1000_array):
         else:
             raise ValueError("Configure the device first")
 
-    """ A public method to sweep the phase value from -180 to 180 deg, calculate phase values of all the channel
-      and set them. If we want beam angle at fixed angle you can pass angle value at which you want center lobe"""
-    def set_beam_angle(self, Ph_Diff):
+    def set_beam_phase_diff(self, Ph_Diff):
+        """ Set phase difference between the adjacent channels of devices
+            parameters:
+                Ph-Diff: type=float
+                            Ph_diff is the phase difference b/w the adjacent channels of devices
+        """
+
+        """ A public method to sweep the phase value from -180 to 180 deg, calculate phase values of all the channel
+            and set them. If we want beam angle at fixed angle you can pass angle value at which you want center lobe
+            
+            Create an empty list. Based on the device number and channel of that device append phase value to that empty 
+            list this creates a list of 4 items. Now write channel of each device, phase values acc to created list 
+            values. This is the structural integrity mentioned above."""
+
         j = 0  # j is index of device and device indicate the adar1000 on which operation is currently done
         for device in list(self.devices.values()):  # device in dict of all adar1000 connected
             channel_phase_value = []  # channel phase value to be written on ind channel
             for ind in range(0, 4):  # ind is index of current channel of current device
-                channel_phase_value.append(((np.rint(Ph_Diff * ((j * 4) + ind) / self.phase_step_size) *
+                channel_phase_value.append((((np.rint(Ph_Diff * ((j * 4) + ind) / self.phase_step_size)) *
                                              self.phase_step_size) + self.pcal[((j * 4) + ind)]) % 360)
             j += 1
             i = 0  # i is index of channel of each device
@@ -229,15 +282,26 @@ class beamformer(adar1000_array):
                 device.latch_rx_settings()
             else:
                 device.latch_tx_settings()
+            # print(channel_phase_value)
 
-    """ This method calculate all the values required to do different plots. It method calls set_beam_angle and 
-        sets the Phases of all channel. All the math is done here"""
     def __calculate_plot(self, gcal_element=0, cal_element=0):
+        """ Calculate all the values required to do different plots. It method calls set_beam_phase_diff and
+            sets the Phases of all channel. All the math is done here.
+            parameters:
+                gcal_element: type=int
+                            If gain calibration is taking place, it indicates element number whose gain calibration is
+                            is currently taking place
+                cal_element: type=int
+                            If Phase calibration is taking place, it indicates element number whose phase calibration is
+                            is currently taking place
+        """
+
+        sweep_angel = 70  # This swweps from -70 deg to +70
         # These are all the phase deltas (i.e. phase difference between Rx1 and Rx2, then Rx2 and Rx3, etc.) we'll sweep
-        PhaseValues = np.arange(-196.875, 196.875, self.phase_step_size)
+        PhaseValues = np.arange(-(self.phase_step_size*sweep_angel), (self.phase_step_size*sweep_angel), self.phase_step_size)
         max_signal = -100000  # Reset max_signal.  We'll keep track of the maximum signal we get as we do this 140 loop.
         max_angle = -90  # Reset max_angle. This is the angle where we saw the max signal.
-        gain, delta, beam_phase, angle, diff_error = [], [], [], [], []  # Create empty lists
+        gain, delta, beam_phase, angle, diff_error, phdelta_phase = [], [], [], [], [], []  # Create empty lists
         for PhDelta in PhaseValues:  # These sweeps phase value from -180 to 180
             # set Phase of channels based on Calibration Flag status and calibration element
             if self.gain_cal:
@@ -245,7 +309,7 @@ class beamformer(adar1000_array):
             if self.phase_cal:
                 self.__set_phase_phase(PhDelta, cal_element)
             if not self.gain_cal and not self.phase_cal:
-                self.set_beam_angle(PhDelta)
+                self.set_beam_phase_diff(PhDelta)
             # arcsin argument must be between 1 and -1, or numpy will throw a warning
             if PhDelta >= 0:
                 SteerAngle = np.degrees(np.arcsin(max(min(1, (self.c * np.radians(np.abs(PhDelta))) / (
@@ -274,6 +338,7 @@ class beamformer(adar1000_array):
             PeakValue_delta = total_delta / self.Averages
             PeakValue_angle = total_angle / self.Averages
 
+
             if np.sign(PeakValue_angle) == -1:
                 target_error = min(-0.01, (
                         np.sign(PeakValue_angle) * (PeakValue_sum - PeakValue_delta) + np.sign(
@@ -290,12 +355,14 @@ class beamformer(adar1000_array):
                 max_angle = PeakValue_angle
                 max_PhDelta = PhDelta
                 data_fft = (data[0] + data[1])
+            phdelta_phase.append(PhDelta)
             gain.append(PeakValue_sum)
             delta.append(PeakValue_delta)
             beam_phase.append(PeakValue_angle)
             angle.append(SteerAngle)
             diff_error.append(target_error)
-
+        ArrayGain = gain
+        ArrayAngle = angle
         NumSamples = len(data_fft)  # number of samples
         win = np.blackman(NumSamples)
         y = data_fft * win
@@ -310,14 +377,18 @@ class beamformer(adar1000_array):
         xf = np.fft.fftshift(xf[1:-1])  # this is the x axis (freq in Hz) for our fft plot
         # Return values/ parameter based on Calibration Flag status
         if self.gain_cal:
-            return max(gain)
+            return mean(gain)
         if self.phase_cal:
-            return angle[gain.index(min(gain))]
+            return phdelta_phase[gain.index(min(gain))]
         if not self.gain_cal and not self.phase_cal:
             return gain, angle, delta, diff_error, beam_phase, xf, max_gain
 
-    # This method starts the Gain Cal routine
     def gain_calibration(self):
+        """ Perfome the Gain Calibration routine."""
+
+        """Set the gain calibration flag and create an empty gcal list. Looping through all the possibility i.e. setting
+            gain of one of the channel to max and all other to 0 create a zero-list where number of 0's depend on total
+            channels. Replace only 1 element with max gain at a time. Now set gain values according to above Note."""
         self.gain_cal = True  # Gain Calibration Flag
         self.gcal = []  # Reset the initiated gcal array so that appending does not result in extra values
         gcalibrated_values = []  # Intermediate cal values list
@@ -325,9 +396,8 @@ class beamformer(adar1000_array):
         for gcal_element in range(0, (4 * len(list(self.devices.values())))):
             beam_cal = [0 for i in range(0, (4 * len(list(self.devices.values()))))]  # set all gain to 0
             beam_cal[gcal_element] = 0x7F  # Only set th gain of current element/channel to max
-            # print(beam_cal, gcal_element)
             j = 0  # # j is index of device and device indicate the adar1000 on which operation is currently done
-            # Note operations and explanation is similar to set_all_gain and set_beam_angle
+            # Note operations and explanation is similar to set_all_gain and set_beam_phase_diff
             for device in self.devices.values():
                 channel_gain_value = []
                 for ind in range(0, 4):
@@ -348,23 +418,34 @@ class beamformer(adar1000_array):
                 elif self.device_mode == 'tx':
                     device.latch_tx_settings()  # writes 0x01 to reg 0x28
             gcal_val = self.__calculate_plot(gcal_element=gcal_element)  # cal plot according to element and routine
+            # This will return gain value in db
             gcalibrated_values.append(gcal_val)  # make a list of intermediate cal values
 
-        """Minimum gain of intermediated cal val is set to Maximum value as we cannot go beyond max value and gain
-           of all other channels are set accordingly"""
+        """ Minimum gain of intermediated cal val is set to Maximum value as we cannot go beyond max value and gain
+            of all other channels are set accordingly"""
         for k in range(0, 8):
             x = ((gcalibrated_values[k] * 127) / (min(gcalibrated_values)))
             self.gcal.append(int(x))  # append final calibrated value to gcal list
 
-        # print(self.gcal)
         self.__save_gain_cal()  # save the gcal list
         self.gain_cal = False  # Reset the Gain calibration Flag once system gain is calibrated
+        # print(self.gcal)
 
-    # This method sets phase of channel when gain calibration is taking place
     def __set_gain_phase(self, Ph_Diff, gcal_element):
+        """ sets phase of channel when gain calibration is taking place
+            parameters:
+                Ph-Diff: type=float
+                            Ph_diff is the phase difference b/w the adjacent channels of devices
+                gcal_element: type=int
+                    If gain calibration is taking place, it indicates element number whose gain calibration is
+                    is currently taking place
+        """
+        """ Looping through all the possibility created in gain_calibration method 
+            create a zero-list where number of 0's depend on total channels. Replace only 1 element with calculated
+             phase at a time. Now set phase values according to above Note."""
         beam_ph = [0 for i in range(0, (4 * len(list(self.devices.values()))))]
-        beam_ph[gcal_element] = (np.rint(Ph_Diff * 1 / self.phase_step_size) * self.phase_step_size) % 360
-        # Note operations and explanation is similar to set_all_gain and set_beam_angle
+        beam_ph[gcal_element] = ((np.rint(Ph_Diff * 1 / self.phase_step_size)) * self.phase_step_size) % 360
+        # Note operations and explanation is similar to set_all_gain and set_beam_phase_diff
         j = 0
         for device in self.devices.values():
             channel_phase_value = []
@@ -385,24 +466,30 @@ class beamformer(adar1000_array):
             elif self.device_mode == 'tx':
                 device.latch_tx_settings()  # writes 0x01 to reg 0x28
 
-    # This method automatically saves gain cal and need not to be accessed from top layer
     def __save_gain_cal(self):
+        """ Automatically saves gain calibration values and need not to be accessed from top layer."""
         with open('gain_cal_val.pkl', 'wb') as file1:
             pickle.dump(self.gcal, file1)  # save calibrated gain value to a file
             file1.close()
 
-    # This method starts the Phase Cal routine
     def phase_calibration(self):
+        """ Perfome the Phase Calibration routine."""
+
+        """ Set the phase calibration flag and create an empty pcal list. Looping through all the possibility 
+            i.e. setting gain of two adjacent channels to gain calibrated values and all other to 0 create a zero-list 
+            where number of 0's depend on total channels. Replace gain value of 2 adjacent channel. 
+            Now set gain values according to above Note."""
         self.phase_cal = True  # Gain Calibration Flag
         self.load_gain_cal('gain_cal_val.pkl', True)  # Load gain cal val as phase cal is dependent on gain cal
         self.pcal = []  # Reset the initiated pcal array so that appending does not result in extra values
         # cal_element indicates current element/channel which is being calibrated
+        # As there are 8 channels and we take two adjacent chans for calibration we have 7 cal_elements
         for cal_element in range(0, (4 * len((list(self.devices.values()))) - 1)):
             beam_cal = [0 for i in range(0, (4 * len(list(self.devices.values()))))]  # set all gain to 0
             # Only set th gain of current & it's adjacent element/channel to gain calibrated values
             beam_cal[cal_element] = self.gcal[cal_element]
             beam_cal[(cal_element + 1)] = self.gcal[(cal_element + 1)]
-            # Note operations and explanation is similar to set_all_gain and set_beam_angle
+            # Note operations and explanation is similar to set_all_gain and set_beam_phase_diff
             j = 0
             for device in self.devices.values():
                 channel_gain_value = []
@@ -424,21 +511,32 @@ class beamformer(adar1000_array):
                     device.latch_tx_settings()  # writes 0x01 to reg 0x28
 
             cal_val = self.__calculate_plot(cal_element=cal_element)  # cal plot according to element and routine
-            self.pcal.append(-1 * cal_val)  # append values to calibrated value list
-        """All the channels are calibrated with respect to it's next/adjacent channel. Map back all the cal values to
-           a single channel. Here everything is maped to 1st channel"""
+            self.pcal.append(-1 * cal_val)  # append values to calibrated value list16+
+        """ All the channels are calibrated with respect to it's next/adjacent channel. Map back all the cal values to
+            a single channel. Here everything is maped to 1st channel. Mapping back to some channel spoils the phase
+            calibration. Without mapping yields good result."""
         for k in range(1, len(self.pcal)):
             self.pcal[k] = self.pcal[k] + self.pcal[k - 1]
         self.pcal.insert(0, 0)  # Calibration of 1st channel is 0 w.r.t itself so add 0 in start on phase cal list
         self.__save_phase_cal()  # save the pcal list
         self.phase_cal = False  # Reset the Phase calibration Flag once system phase is calibrated
+        print(self.pcal)
 
-    # This method sets phase of channel when phase calibration is taking place
     def __set_phase_phase(self, Ph_Diff, cal_element):
-        # Note operations and explanation is similar to set_all_gain and set_beam_angle
+        """ sets phase of channel when phase calibration is taking place
+            parameters:
+                Ph-Diff: type=float
+                            Ph_diff is the phase difference b/w the adjacent channels of devices
+                cal_element: type=int
+                    If Phase calibration is taking place, it indicates element number whose phase calibration is
+                    is currently taking place
+        """
+        """ Looping through all the possibility created in phase_calibration method create a zero-list where number
+            of 0's depend on total channels. Replace 2 adjacent element with calculated phase at a time. 
+            Now set phase values according to above Note."""
         beam_ph = [0 for i in range(0, (4 * len(list(self.devices.values()))))]
-        beam_ph[cal_element] = (np.rint(Ph_Diff * 1 / self.phase_step_size) * self.phase_step_size) % 360
-        beam_ph[(cal_element + 1)] = ((np.rint(Ph_Diff * 1 / self.phase_step_size) * self.phase_step_size) % 360) - 180
+        beam_ph[cal_element] = (((np.rint(Ph_Diff * cal_element / self.phase_step_size)) * self.phase_step_size)) % 360
+        beam_ph[(cal_element + 1)] = (((np.rint(Ph_Diff * (cal_element + 1) / self.phase_step_size)) * self.phase_step_size) - 180) % 360
         j = 0
         for device in self.devices.values():
             channel_phase_value = []
@@ -459,16 +557,24 @@ class beamformer(adar1000_array):
             elif self.device_mode == 'tx':
                 device.latch_tx_settings()  # writes 0x01 to reg 0x28
 
-    # This method automatically saves phase cal and need not to be accessed from top layer
     def __save_phase_cal(self):
+        """ Automatically saves phase cal and need not to be accessed from top layer."""
         with open('phase_cal_val.pkl', 'wb') as file:
             pickle.dump(self.pcal, file)  # save calibrated phase value to a file
             file.close()
 
-    # Gain plots sum_chan. Delta plots the difference and Error plots the diff of sum & delta chans
     def plot(self, plot_type: str):
+        """ Plot the graph accoeding to Demo.
+            parameters:
+                plot_type: type=str
+                    fft plots fft at peak-angle
+                    monopulse plots output of monopulse tracking
+                    polar plots polar plot
+        """
+        """ Gain plots sum_chan. Delta plots the difference and Error plots the diff of sum & delta chans."""
         gain, angle, delta, diff_error, beam_phase, xf, max_gain = self.__calculate_plot()
         if plot_type == "fft":
            return xf / 1e6, max_gain
         elif plot_type == "monopulse":
+            print(angle[gain.index(max(gain))])
             return gain, angle
