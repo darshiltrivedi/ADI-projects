@@ -5,10 +5,15 @@ import time
 from PyQt5 import QtCore, QtGui, QtWidgets, uic
 from PyQt5.QtWidgets import *
 from PyQt5.QtCore import *
+from CN0566 import sdr, pll, beamformer
 
-# This is a seprate Pluto whose tx is connected back to Rx and will be used in session 2.
-# For Now, while I am testing I made this global as I have a seprate pluto on my work bench connected to RPI
-pluto_ss2 = adi.Pluto(uri="ip:192.168.2.1")  # Pluto on RPI doesn't work from windows i.e. if we run source code on windows but everything including pluto is connected to RPI.
+
+# Handle high resolution displays:
+# if hasattr(QtCore.Qt, 'AA_EnableHighDpiScaling'):
+#     QtWidgets.QApplication.setAttribute(QtCore.Qt.AA_EnableHighDpiScaling, True)
+# if hasattr(QtCore.Qt, 'AA_UseHighDpiPixmaps'):
+#     QtWidgets.QApplication.setAttribute(QtCore.Qt.AA_UseHighDpiPixmaps, True)
+
 
 class MyWindow(QtWidgets.QMainWindow):
     def __init__(self):
@@ -17,8 +22,12 @@ class MyWindow(QtWidgets.QMainWindow):
         self.start_button.clicked.connect(self.start_plot)  # call start_plot method when button clicked
         self.stop_button.clicked.connect(self.stop_plot)  # call stop_plot method when button clicked
         self.calibrate_button.clicked.connect(self.calibration)  # call calibration method when button clicked
+        self.fft_worker = None
+        self.rplot_worker = None
+        self.pplot_worker = None
+        self.fft_psa_worker = None
+        self.calibrate_worker = None
         self.show()
-
 
     def start_plot(self):
         # This function is connected to start plot button and it plots based on current tab and all tab values
@@ -41,22 +50,20 @@ class MyWindow(QtWidgets.QMainWindow):
 
         elif (self.displaytab.currentIndex() == 0 and self.configarea.currentIndex() != 0):
             # Currently I am working on this. Update it to git as I complete testing of it.
-            if self.adf4159_radio.isChecked():
-                self.pll = adi.adf4159(uri=str(self.rpi_ip_val.toPlainText()))
-                if self.oneadar_radio.isChecked():
-                    self.sdr = adi.Pluto(uri=str(self.LO_ip_val.toPlainText())).rx
-                elif self.twoadar_radio.isChecked():
-                    self.sdr = adi.ad9361(uri=str(self.LO_ip_val.toPlainText())).rx
 
-            elif self.ad9361_radio.isChecked():
-                if self.oneadar_radio.isChecked():
-                    self.sdr = adi.Pluto(uri=str(self.LO_ip_val.toPlainText())).rx
-                    self.pll = adi.Pluto(uri=str(self.LO_ip_val.toPlainText())).tx
-                elif self.twoadar_radio.isChecked():
-                    self.sdr = adi.ad9361(uri=str(self.LO_ip_val.toPlainText())).rx
-                    self.pll = adi.ad9361(uri=str(self.LO_ip_val.toPlainText())).tx
+            self.my_pll = pll(uri=str(self.rpi_ip_val.toPlainText()))
+            self.my_sdr = sdr(uri=str(self.LO_ip_val_ss2.toPlainText()))
+            self.my_beamformer = beamformer(uri=str(self.rpi_ip_val.toPlainText()),
+                                chip_ids=["BEAM0", "BEAM1"],
+                                device_map=[[1], [2]],
+                                element_map=[[1, 2, 3, 4], [5, 6, 7, 8]],
+                                device_element_map={
+                                    1: [2, 1, 4, 3],
+                                    2: [6, 5, 8, 7],
+                                    },
+                                )
 
-            self.rplot_worker = Rect_plot(self.sdr, self.pll)
+            self.rplot_worker = Rect_plot(self.my_beamformer, self.my_sdr, self.my_pll, self.rplot_display)
             self.rplot_worker.start()
 
             print("Rectangular Plot")
@@ -69,10 +76,16 @@ class MyWindow(QtWidgets.QMainWindow):
 
     def stop_plot(self):
         # This function is connected to stop plot button. It stops plotting all the plot if any plotting currently
-        if self.fft_worker.isRunning():
+        if (self.fft_worker != None and self.fft_worker.isRunning()):
             self.fft_worker.terminate()
-        if self.rplot_worker.isRunning():
+        if (self.rplot_worker != None and self.rplot_worker.isRunning()):
             self.rplot_worker.terminate()
+        if (self.pplot_worker != None and self.pplot_worker.isRunning()):
+            self.pplot_worker.terminate()
+        if (self.fft_psa_worker != None and self.fft_psa_worker.isRunning()):
+            self.fft_psa_worker.terminate()
+        if (self.calibrate_worker != None and self.calibrate_worker.isRunning()):
+            self.calibrate_worker.terminate()
 
     def calibration(self):
         # This function is connected to calibrate button and it does calibration based on radio button selected.
@@ -90,6 +103,7 @@ class MyWindow(QtWidgets.QMainWindow):
             # add both Calibration Routine here
             # place this routine in a seprate thread as it takes time to complete
             print("Full System Calibration is going on")
+
 
 class FFT(QThread):
     # I could not inherit from main thread to worker thread maybe pyqt5 does not permit it as value cannot be accessed at same time
@@ -120,7 +134,7 @@ class FFT(QThread):
         pluto_ss2.rx_lo = int(self.sdr_rx_val.toPlainText()) * 1000000
         pluto_ss2.tx_cyclic_buffer = True
         pluto_ss2.tx_hardwaregain = -30
-        pluto_ss2.rx_hardwaregain_chan0 = 80
+        # pluto_ss2.rx_hardwaregain_chan0 = 80
         pluto_ss2.gain_control_mode = 'slow_attack'
         pluto_ss2.sample_rate = int(self.sdr_sr_val.toPlainText())
         pluto_ss2.dds_scales = ('0.1', '0.25', '0', '0', '0.1', '0.25', '0', '0')
@@ -173,13 +187,25 @@ class FFT(QThread):
 
 # This is an empty worker thread but will connected to rectangular plot display widget.
 class Rect_plot(QThread):
-    def __init__(self, sdr, pll, parent=None):
+    def __init__(self, my_beamformer, my_sdr, my_pll, rplot_display, parent=None):
         super(Rect_plot, self).__init__(parent)
-        self.sdr = sdr
-        self.pll = pll
+        self.my_beamformer = my_beamformer
+        self.my_sdr = my_sdr
+        self.my_pll = my_pll
+        self.rplot_display = rplot_display
 
     def run(self):
-        pass
+        self.my_sdr.configure()
+        self.my_pll.configure()
+        self.my_beamformer.configure(device_mode="rx")
+        self.my_beamformer.rx_dev = self.my_sdr
+        while True:
+            self.rplot_display.axes.clear()
+            self.rplot_display.axes.set_xlabel('Angle')
+            self.rplot_display.axes.set_ylabel('Gain')
+            x,y = self.my_beamformer.plot(plot_type="fft")
+            self.rplot_display.axes.plot(x, y)
+            self.rplot_display.canvas.draw()
 
 # This is an empty worker thread but will connected to Polar plot display widget.
 class Polar_plot(QThread):
