@@ -13,6 +13,7 @@ sudo make install
 
 # Update pyadi-iio
 git clone https://www.github.com/analogdevicesinc/pyadi-iio
+cd pyadi-iio
 sudo python3 setup.py install
 
 # Update pylibiio:
