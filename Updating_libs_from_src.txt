@@ -1,0 +1,26 @@
+# Hacks on Fresh Kuiper Linux and Building from source
+
+## Importing ADI and rx failing on current freshly burnt KUIPER linux 
+
+##  Built pyadi and libiio from source
+
+#Update libiio:
+git clone https://www.github.com/analogdevicesinc/libiio
+cd libiio
+cmake .
+make
+sudo make install
+
+# Update pyadi-iio
+git clone https://www.github.com/analogdevicesinc/pyadi-iio
+cd pyadi-iio
+sudo python3 setup.py install
+
+# Update pylibiio:
+sudo pip3 install pylibiio==0.23.1
+
+
+## After the above steps if your device throws error try this:
+
+# and finally… this is probably not the right thing to do, but after installing pylibiio version 0.23.1, iio.version was still 0.21! Okay, check iio.__file__ , which pointed to /lib/python3.7/site-packages/iio.py. But pip3 install process noted that it was installed to dist-packages. So to check if Python defers back to dist-packages:
+sudo mv /lib/python3.7/site-packages/iio.py /lib/python3.7/site-packages/iio_save.py

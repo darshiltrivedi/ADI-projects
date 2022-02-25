@@ -1,0 +1,46 @@
+# Step by Step guide to add device support to pyadi-iio
+
+1: Fork the analogdevices/pyadi-iio.git to your account. (Allows to edit things with admin rights)
+
+2: Create a developer branch of device whose support you want to add.
+
+3: Clone the branch to your local linux machine by typing command-
+	- git clone --branch branch_name https:/github.com/your_git-id/pyadi-iio.git
+
+4: Change adi/__init__.py file. Import created device API in constructor.
+
+5: Add API file of device in same folder i.e. adi/device_API.py
+
+6: Add examples on how to use the devices with python in examples/dev_example.py
+
+7: Add hardware test to test/dev_test.py
+	-To run a hardware test type- pytest ./test/test_ad4630.py -vs --hw=ad4630-24 --uri=ip:analog.local in terminal
+	Note use / for linux and \ for windows
+	Also make sure you are in pyadi folder while performing test.
+	create device emulation to test software with hardware. For further info visit:- https://pytest-libiio.readthedocs.io/en/latest/emulation/
+
+8: Add document file in doc/source/devices/adi.dev_name.rst
+	-update doc/source/devices/index.rst to add name of device in index of html
+
+9: Update supported_parts.md in root of pyadi.
+
+10: Make the html files
+	- In termincal cd to pyadi-iio/doc & run sudo make html
+
+11: Add all the updated files to local git
+	- sudo git add -A
+
+12: In pyadi, do pre-commit checks
+	- sudo pre-commit install
+	- sudo pre-commit run
+	- If pre-commit changes any file repeat step number 11 i.e. add the update file
+
+13:Check status for you local git repo to see if all the files are added correctly
+	- git status ( All added files should be in green)
+
+14: Commit the changes to your local git repo
+	- sudo git commit -m "Enter message of commit here"
+
+15: Make your git global from local device
+	- sudo git push
+	- enter your login credentials. you might need to generate git token for yourself for 1st time and use that token password as password.
